@@ -1,21 +1,17 @@
 from pathlib import Path
 from re import compile as re_compile, findall
-from typing import TYPE_CHECKING
 
 from pydantic import FilePath
 
-from app.schemas.base import BaseCardTypeCustomFontAllText
-from modules.BaseCardType import (
+from app.cards.base import (
     BaseCardType,
-    CardDescription,
+    CardTypeDescription,
+    DefaultCardConfig,
     Extra,
     ImageMagickCommands,
 )
-from app.logging.logger import log
-from modules.RemoteFile import RemoteFile
-
-if TYPE_CHECKING:
-    from app.yaml.font import Font
+from app.cards.loader import RemoteFile
+from app.schemas.base import BaseCardTypeCustomFontAllText
 
 
 class TitleColorMatch(BaseCardType):
@@ -27,7 +23,7 @@ class TitleColorMatch(BaseCardType):
     transparent space that makes its  location incorrect.
     """
 
-    API_DETAILS =  CardDescription(
+    API_DETAILS = CardTypeDescription(
         name='Title Color Match',
         identifier='azuravian/TitleColorMatch',
         example=(
@@ -64,27 +60,16 @@ class TitleColorMatch(BaseCardType):
     """Directory where all reference files used by this card are stored"""
     REF_DIRECTORY = Path(__file__).parent.parent / 'ref'
 
-    """Characteristics for title splitting by this class"""
-    TITLE_CHARACTERISTICS = {
-        'max_line_width': 32,
-        'max_line_count': 3,
-        'style': 'bottom',
-    }
-
-    """Default font and text color for episode title text"""
-    TITLE_FONT = str((REF_DIRECTORY / 'Sequel-Neue.otf').resolve())
-    TITLE_COLOR = 'auto'
-
-    """Default characters to replace in the generic font"""
-    FONT_REPLACEMENTS = {
-        '[': '(', ']': ')', '(': '[', ')': ']', '―': '-', '…': '...'
-    }
-
-    """Whether this CardType uses season titles for archival purposes"""
-    USES_SEASON_TITLE = True
-
-    """Archive name for this card type"""
-    ARCHIVE_NAME = 'Title Color Match Style'
+    CardConfig = DefaultCardConfig(
+        font_file=REF_DIRECTORY / 'Sequel-Neue.otf',
+        font_color='auto',
+        font_replacements={
+            '[': '(', ']': ')', '(': '[', ')': ']', '―': '-', '…': '...'
+        },
+        title_max_line_width=32,
+        title_max_line_count=3,
+        title_split_style='bottom',
+    )
 
     """Source path for the gradient image overlayed over all title cards"""
     __GRADIENT_IMAGE = str(RemoteFile('azuravian', 'leftgradient.png'))
@@ -126,8 +111,8 @@ class TitleColorMatch(BaseCardType):
             episode_text: str,
             hide_season_text: bool = False,
             hide_episode_text: bool = False,
-            font_color: str = TITLE_COLOR,
-            font_file: str = TITLE_FONT,
+            font_color: str = CardConfig.font_color,
+            font_file: str = str(CardConfig.font_file),
             font_interline_spacing: int = 0,
             font_kerning: float = 1.0,
             font_size: float = 1.0,
@@ -186,11 +171,11 @@ class TitleColorMatch(BaseCardType):
         return [
             # Resize logo
             fr'\(',
-            f'"{self.logo.resolve()}"',
-            f'-trim',
-            f'+repage',
-            f'-resize x650',
-            fr'-resize 1155x650\>',
+                f'"{self.logo.resolve()}"',
+                f'-trim',
+                f'+repage',
+                f'-resize x650',
+                fr'-resize 1155x650\>',
             fr'\)',
             # Overlay resized logo
             f'-gravity northwest',
@@ -348,12 +333,12 @@ class TitleColorMatch(BaseCardType):
             f'-stroke black',
             f'-strokewidth 6',
             fr'\(',
-            f'-gravity center',
-            f'-font "{self.SEASON_COUNT_FONT.resolve()}"',
-            f'label:"{self.season_text} •"',
-            f'-font "{self.EPISODE_COUNT_FONT.resolve()}"',
-            f'label:"{self.episode_text}"',
-            f'+smush 30',
+                f'-gravity center',
+                f'-font "{self.SEASON_COUNT_FONT.resolve()}"',
+                f'label:"{self.season_text} •"',
+                f'-font "{self.EPISODE_COUNT_FONT.resolve()}"',
+                f'label:"{self.episode_text}"',
+                f'+smush 30',
             fr'\)',
             f'-gravity southwest',
             f'-geometry +50+50',
@@ -362,64 +347,17 @@ class TitleColorMatch(BaseCardType):
             f'-stroke "{self.SERIES_COUNT_TEXT_COLOR}"',
             f'-strokewidth 0.75',
             fr'\(',
-            f'-gravity center',
-            f'-font "{self.SEASON_COUNT_FONT.resolve()}"',
-            f'label:"{self.season_text} •"',
-            f'-font "{self.EPISODE_COUNT_FONT.resolve()}"',
-            f'label:"{self.episode_text}"',
-            f'+smush 30',
+                f'-gravity center',
+                f'-font "{self.SEASON_COUNT_FONT.resolve()}"',
+                f'label:"{self.season_text} •"',
+                f'-font "{self.EPISODE_COUNT_FONT.resolve()}"',
+                f'label:"{self.episode_text}"',
+                f'+smush 30',
             fr'\)',
             f'-gravity southwest',
             f'-geometry +50+50',
             f'-composite',
         ]
-
-
-    @staticmethod
-    def is_custom_font(font: 'Font') -> bool:
-        """
-        Determines whether the given arguments represent a custom font
-        for this card.
-        
-        Args:
-            font: The Font being evaluated.
-
-        Returns:
-            True if a custom font is indicated, False otherwise.
-        """
-
-        return (
-            font.color != TitleColorMatch.TITLE_COLOR
-            or font.file != TitleColorMatch.TITLE_FONT
-            or font.interline_spacing != 0
-            or font.kerning != 1.0
-            or font.size != 1.0
-            or font.stroke_width != 1.0
-            or font.vertical_shift != 0
-        )
-
-
-    @staticmethod
-    def is_custom_season_titles(
-            custom_episode_map: bool,
-            episode_text_format: str,
-        ) -> bool:
-        """
-        Determines whether the given attributes constitute custom or
-        generic season titles.
-
-        Args:
-            custom_episode_map: Whether the EpisodeMap was customized.
-            episode_text_format: The episode text format in use.
-
-        Returns:
-            True if custom season titles are indicated, False otherwise.
-        """
-
-        return (
-            custom_episode_map
-            or episode_text_format != TitleColorMatch.EPISODE_TEXT_FORMAT
-        )
 
 
     def create(self) -> None:
