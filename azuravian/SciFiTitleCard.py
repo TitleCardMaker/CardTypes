@@ -1,7 +1,7 @@
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated
+from typing import Annotated
 
-from pydantic import Field, FilePath, PositiveFloat, StringConstraints, constr, root_validator
+from pydantic import Field, FilePath, StringConstraints, root_validator
 
 from app.cards.base import (
     BaseCardType,
@@ -11,7 +11,6 @@ from app.cards.base import (
     ImageMagickCommands,
 )
 from app.cards.loader import RemoteFile
-from app.logging.logger import log
 from app.schemas.base import BaseCardTypeCustomFontNoText
 
 
@@ -135,12 +134,10 @@ class SciFiTitleCard(BaseCardType):
 
             return values
 
-    """Directory where all reference files used by this card are stored"""
-    REF_DIRECTORY = Path(__file__).parent.parent / 'azuravian' / 'ref' / 'SciFi'
-
     """Default configuration for this card type"""
+    TITLE_FONT = RemoteFile('azuravian', 'ref/SciFi/PcapTerminal-BO9B.ttf').resolve()
     CardConfig = DefaultCardConfig(
-        font_file=RemoteFile('azuravian', 'ref/SciFi/PcapTerminal-BO9B.ttf'),
+        font_file=TITLE_FONT,
         font_color='white',
         title_max_line_width=20,
         title_max_line_count=3,
