@@ -1,22 +1,18 @@
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, Union
+from typing import Annotated, Literal, Union
 
-from pydantic import conint, root_validator
+from pydantic import Field, FilePath, root_validator
 
-from app.info.episode import EpisodeInfo
-from app.logging.logger import log
-from app.schemas.base import BaseCardTypeCustomFontAllText
-from modules.BaseCardType import (
+from app.cards.base import (
     BaseCardType,
-    CardDescription,
+    CardTypeDescription,
+    DefaultCardConfig,
     Extra,
     ImageMagickCommands,
 )
-from modules.RemoteFile import RemoteFile
-from modules.Title import SplitCharacteristics
-
-if TYPE_CHECKING:
-    from app.yaml.font import Font
+from app.cards.loader import RemoteDirectory, RemoteFile
+from app.info.episode import EpisodeInfo
+from app.schemas.base import BaseCardTypeCustomFontAllText
 
 
 class HorizonTitleCard(BaseCardType):
@@ -29,7 +25,7 @@ class HorizonTitleCard(BaseCardType):
     """
 
     """API Parameters"""
-    API_DETAILS = CardDescription(
+    API_DETAILS = CardTypeDescription(
         name='Horizon',
         identifier='Supremicus/HorizonTitleCard',
         example=(
@@ -196,11 +192,11 @@ class HorizonTitleCard(BaseCardType):
         stroke_color: str = 'black'
         episode_text_vertical_shift: int = 0
         episode_text_font: Union[
-            Literal['{title_font}'],
+            Literal['{font_file}'],
             str,
-            Path,
+            FilePath,
         ] = str(RemoteFile('Supremicus', 'ref/fonts/ExoSoft-Medium.ttf'))
-        episode_text_font_size: float = 1.0
+        episode_text_font_size: Annotated[float, Field(ge=0)] = 1.0
         episode_text_color: str | None = None
         episode_text_stroke_color: str | None = None
         episode_text_kerning: int = 18
@@ -210,7 +206,7 @@ class HorizonTitleCard(BaseCardType):
             'acolyte', 'ashoka', 'andor', 'bobafett', 'mandalorian', 'obiwan',
             'witcher', 'logo',
         ] | None = None
-        symbol_opacity: conint(ge=0, le=100) = 100
+        symbol_opacity: Annotated[int, Field(ge=0, le=100)] = 100
         logo_file: Path
         alignment_overlay: bool = False
         crt_overlay: Literal['nobezel', 'bezel'] | None = None
@@ -219,7 +215,7 @@ class HorizonTitleCard(BaseCardType):
 
         @root_validator(skip_on_failure=True, allow_reuse=True)
         def validate_episode_text_font_file(cls, values: dict) -> dict:
-            if (etf := values['episode_text_font']) == '{title_font}':
+            if (etf := values['episode_text_font']) in ('{title_font}', '{font_file}'):
                 values['episode_text_font'] = values['font_file']
             # Episode text font does not exist, search alongside source image
             elif not (etf := Path(etf)).exists():
@@ -246,51 +242,45 @@ class HorizonTitleCard(BaseCardType):
 
             return values
 
-    """Characteristics for title splitting by this class"""
-    TITLE_CHARACTERISTICS: SplitCharacteristics = {
-        'max_line_width': 16,
-        'max_line_count': 4,
-        'style': 'bottom',
-    }
+    FONT_DIRECTORY = RemoteDirectory('Supremicus', 'ref/fonts')
+    SYMBOL_DIRECTORY = RemoteDirectory('Supremicus', 'ref/symbols')
+    OVERLAY_DIRECTORY = RemoteDirectory('Supremicus', 'ref/overlays')
 
-    """Characteristics of the default title font"""
-    TITLE_FONT = str(RemoteFile('Supremicus', 'ref/fonts/HelveticaNeue-Bold.ttf'))
-    TITLE_COLOR = 'white'
-    FONT_REPLACEMENTS: dict[str, str] = {}
-
-    """Whether this CardType uses season titles for archival purposes"""
-    USES_SEASON_TITLE = True
-
-    """Standard class has standard archive name"""
-    ARCHIVE_NAME = 'Horizon'
+    """Default configuration for this card type"""
+    CardConfig = DefaultCardConfig(
+        font_file=(FONT_DIRECTORY / 'HelveticaNeue-Bold.ttf').resolve(),
+        font_color='white',
+        title_max_line_width=16,
+        title_max_line_count=4,
+        title_split_style='bottom',
+        episode_text_format='EPISODE {to_cardinal(episode_number)}',
+    )
 
     """Characteristics of episode text"""
-    EPISODE_TEXT_FORMAT = 'EPISODE {to_cardinal(episode_number)}'
-    EPISODE_TEXT_FONT = RemoteFile('Supremicus', 'ref/fonts/ExoSoft-Medium.ttf')
+    EPISODE_TEXT_FONT = FONT_DIRECTORY / 'ExoSoft-Medium.ttf'
 
     """Source path for symbol images to be overlayed behind text"""
-    __SYMBOL_IMAGE_ACOLYTE = RemoteFile('Supremicus', 'ref/symbols/acolyte.png')
-    __SYMBOL_IMAGE_AHSOKA = RemoteFile('Supremicus', 'ref/symbols/ahsoka.png')
-    __SYMBOL_IMAGE_ANDOR = RemoteFile('Supremicus', 'ref/symbols/andor.png')
-    __SYMBOL_IMAGE_BOBAFETT = RemoteFile('Supremicus', 'ref/symbols/bobafett.png')
-    __SYMBOL_IMAGE_MANDALORIAN = RemoteFile('Supremicus', 'ref/symbols/mandalorian.png')
-    __SYMBOL_IMAGE_OBIWAN = RemoteFile('Supremicus', 'ref/symbols/obiwan.png')
-    __SYMBOL_IMAGE_WITCHER = RemoteFile('Supremicus', 'ref/symbols/witcher.png')
+    __SYMBOL_IMAGE_ACOLYTE = SYMBOL_DIRECTORY / 'acolyte.png'
+    __SYMBOL_IMAGE_AHSOKA = SYMBOL_DIRECTORY / 'ahsoka.png'
+    __SYMBOL_IMAGE_ANDOR = SYMBOL_DIRECTORY / 'andor.png'
+    __SYMBOL_IMAGE_BOBAFETT = SYMBOL_DIRECTORY / 'bobafett.png'
+    __SYMBOL_IMAGE_MANDALORIAN = SYMBOL_DIRECTORY / 'mandalorian.png'
+    __SYMBOL_IMAGE_OBIWAN = SYMBOL_DIRECTORY / 'obiwan.png'
+    __SYMBOL_IMAGE_WITCHER = SYMBOL_DIRECTORY / 'witcher.png'
 
     """Alignment overlay image"""
-    __ALIGNMENT_OVERLAY_IMAGE = RemoteFile('Supremicus', 'ref/overlays/overlay_alignment.png')
+    __ALIGNMENT_OVERLAY_IMAGE = OVERLAY_DIRECTORY / 'overlay_alignment.png'
 
     """Source path for CRT overlays to be overlayed if enabled"""
-    __OVERLAY_PLAIN = RemoteFile('Supremicus', 'ref/overlays/overlay_plain.png')
-    __OVERLAY_PLAIN_BEZEL = RemoteFile('Supremicus', 'ref/overlays/overlay_plain_bezel.png')
-    __OVERLAY_PLAY = RemoteFile('Supremicus', 'ref/overlays/overlay_play.png')
-    __OVERLAY_PLAY_BEZEL = RemoteFile('Supremicus', 'ref/overlays/overlay_play_bezel.png')
-    __OVERLAY_REWIND = RemoteFile('Supremicus', 'ref/overlays/overlay_rewind.png')
-    __OVERLAY_REWIND_BEZEL = RemoteFile('Supremicus', 'ref/overlays/overlay_rewind_bezel.png')
-
+    __OVERLAY_PLAIN = OVERLAY_DIRECTORY / 'overlay_plain.png'
+    __OVERLAY_PLAIN_BEZEL = OVERLAY_DIRECTORY / 'overlay_plain_bezel.png'
+    __OVERLAY_PLAY = OVERLAY_DIRECTORY / 'overlay_play.png'
+    __OVERLAY_PLAY_BEZEL = OVERLAY_DIRECTORY / 'overlay_play_bezel.png'
+    __OVERLAY_REWIND = OVERLAY_DIRECTORY / 'overlay_rewind.png'
+    __OVERLAY_REWIND_BEZEL = OVERLAY_DIRECTORY / 'overlay_rewind_bezel.png'
     """Source path for the gradient image"""
-    __GRADIENT_IMAGE = RemoteFile('Supremicus', 'ref/overlays/radial_gradient.png')
-    __GRADIENT_IMAGE_CENTERED = RemoteFile('Supremicus', 'ref/overlays/radial_gradient_centered.png')
+    __GRADIENT_IMAGE = OVERLAY_DIRECTORY / 'radial_gradient.png'
+    __GRADIENT_IMAGE_CENTERED = OVERLAY_DIRECTORY / 'radial_gradient_centered.png'
 
     __slots__ = (
         'source_file', 'output_file', 'title_text', 'season_text',
@@ -301,7 +291,7 @@ class HorizonTitleCard(BaseCardType):
         'episode_text_font', 'episode_text_font_size', 'episode_text_color',
         'episode_text_stroke_color', 'episode_text_kerning', 'separator', 'h_align',
         'symbol', 'symbol_opacity', 'logo', 'alignment_overlay', 'crt_overlay',
-        'crt_state_overlay', 'omit_gradient'
+        'crt_state_overlay', 'omit_gradient', 'watched',
     )
 
     def __init__(self,
@@ -312,8 +302,8 @@ class HorizonTitleCard(BaseCardType):
             episode_text: str,
             hide_season_text: bool = False,
             hide_episode_text: bool = False,
-            font_color: str = TITLE_COLOR,
-            font_file: str = TITLE_FONT,
+            font_color: str = CardConfig.font_color,
+            font_file: str = str(CardConfig.font_file),
             font_interline_spacing: int = 0,
             font_interword_spacing: int = 0,
             font_kerning: float = 1.0,
@@ -324,10 +314,10 @@ class HorizonTitleCard(BaseCardType):
             grayscale: bool = False,
             stroke_color: str = 'black',
             episode_text_vertical_shift: int = 0,
-            episode_text_font: Path = EPISODE_TEXT_FONT,
+            episode_text_font: Path = EPISODE_TEXT_FONT.resolve(),
             episode_text_font_size: float = 1.0,
-            episode_text_color: str = None,
-            episode_text_stroke_color: str = None,
+            episode_text_color: str = CardConfig.font_color,
+            episode_text_stroke_color: str = 'black',
             episode_text_kerning: int = 18,
             separator: str = '•',
             h_align: Literal['left', 'center', 'right'] = 'left',
@@ -347,6 +337,7 @@ class HorizonTitleCard(BaseCardType):
             crt_overlay: Literal['nobezel', 'bezel'] | None = None,
             crt_state_overlay: bool = False,
             omit_gradient: bool = True,
+            watched: bool = True,
             **unused,
         ) -> None:
         """Construct a new instance of this card."""
@@ -392,6 +383,7 @@ class HorizonTitleCard(BaseCardType):
         self.crt_overlay = crt_overlay
         self.crt_state_overlay = crt_state_overlay
         self.omit_gradient = omit_gradient
+        self.watched = watched
 
 
     @property
@@ -479,7 +471,7 @@ class HorizonTitleCard(BaseCardType):
         kerning = -1.25 * self.font_kerning
 
         return [
-            f'-font "{self.font_file.resolve()}"',
+            f'-font "{self.font_file}"',
             f'-kerning {kerning}',
             f'-interline-spacing {interline_spacing}',
             f'-interword-spacing {interword_spacing}',
@@ -511,6 +503,9 @@ class HorizonTitleCard(BaseCardType):
     def add_symbol_image_commands(self) -> ImageMagickCommands:
         """Add the static gradient to this object's source image."""
 
+        if not self.symbol:
+            return []
+
         SYMBOLS = {
             'acolyte': self.__SYMBOL_IMAGE_ACOLYTE,
             'ahsoka': self.__SYMBOL_IMAGE_AHSOKA,
@@ -521,7 +516,7 @@ class HorizonTitleCard(BaseCardType):
             'witcher': self.__SYMBOL_IMAGE_WITCHER,
             'logo': self.logo,
         }
-        symbol_image: Path | None = SYMBOLS.get(self.symbol)
+        symbol_image: Path | None = SYMBOLS.get(self.symbol, None)
         if not symbol_image or not symbol_image.exists():
             return []
 
@@ -529,14 +524,16 @@ class HorizonTitleCard(BaseCardType):
 
         return [
             f'-gravity center',
-            f'\( "{symbol_image.resolve()}"',
-            f'-resize x850',
-            f'-resize 850x850\>',
-            f'-matte',
-            f'-channel A',
-            f'+level 0,{self.symbol_opacity}%',
-            f'+channel',
-            f'\) -geometry {x:+}+0',
+            fr'\(',
+                f'"{symbol_image.resolve()}"',
+                f'-resize x850',
+                fr'-resize 850x850\>',
+                f'-matte',
+                f'-channel A',
+                f'+level 0,{self.symbol_opacity}%',
+                f'+channel',
+            fr'\)',
+            f'-geometry {x:+}+0',
             f'-composite',
         ]
 
@@ -589,17 +586,17 @@ class HorizonTitleCard(BaseCardType):
             gradient_image = self.__GRADIENT_IMAGE_CENTERED
 
         return [
-            f'\( "{gradient_image.resolve()}"',
-            f'-rotate {rotation} \)',
+            fr'\(',
+                f'"{gradient_image.resolve()}"',
+                f'-rotate {rotation}',
+            fr'\)',
             f'-composite',
         ]
 
 
     @property
     def add_alignment_overlay(self) -> ImageMagickCommands:
-        """
-        Add alignment overlay image.
-        """
+        """Add alignment overlay image."""
 
         if not self.alignment_overlay:
             return []
@@ -608,83 +605,6 @@ class HorizonTitleCard(BaseCardType):
             f'"{self.__ALIGNMENT_OVERLAY_IMAGE.resolve()}"',
             f'-composite',
         ]
-
-
-    @staticmethod
-    def modify_extras(
-            extras: dict,
-            custom_font: bool,
-            custom_season_titles: bool,
-        ) -> None:
-        """
-        Modify the given extras based on whether font or season titles
-        are custom.
-
-        Args:
-            extras: Dictionary to modify.
-            custom_font: Whether the font are custom.
-            custom_season_titles: Whether the season titles are custom.
-        """
-
-        # Generic font, reset custom episode text color
-        if not custom_font:
-            for extra in (
-                'stroke_color',
-                'episode_text_color',
-                'episode_text_kerning',
-                'episode_text_stroke_color',
-                'episode_text_font',
-                'episode_text_vertical_shift',
-            ):
-                if extra in extras:
-                    del extras[extra]
-
-
-    @staticmethod
-    def is_custom_font(font: 'Font', extras: dict) -> bool:
-        """
-        Determine whether the given font characteristics constitute a
-        default or custom font.
-
-        Args:
-            font: The Font being evaluated.
-            extras: Dictionary of extras for evaluation.
-
-        Returns:
-            True if a custom font is indicated, False otherwise.
-        """
-
-        custom_extras = (
-            ('stroke_color' in extras
-                and extras['stroke_color'] != 'black')
-            or ('episode_text_vertical_shift' in extras
-                and extras['episode_text_vertical_shift'] != 0)
-        )
-
-        return custom_extras or HorizonTitleCard._is_custom_font(font)
-
-
-    @staticmethod
-    def is_custom_season_titles(
-            custom_episode_map: bool,
-            episode_text_format: str,
-        ) -> bool:
-        """
-        Determine whether the given attributes constitute custom or
-        generic season titles.
-
-        Args:
-            custom_episode_map: Whether the EpisodeMap was customized.
-            episode_text_format: The episode text format in use.
-
-        Returns:
-            True if custom season titles are indicated, False otherwise.
-        """
-
-        return (
-            custom_episode_map
-            or episode_text_format != HorizonTitleCard.EPISODE_TEXT_FORMAT
-        )
 
 
     @staticmethod
