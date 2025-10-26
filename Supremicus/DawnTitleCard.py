@@ -1,22 +1,18 @@
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, Union
+from typing import Annotated, Literal, Union
 
-from pydantic import root_validator
+from pydantic import Field, root_validator
 
-from app.info.episode import EpisodeInfo
-from app.logging.logger import log
-from app.schemas.base import BaseCardTypeCustomFontAllText
-from modules.BaseCardType import (
+from app.cards.base import (
     BaseCardType,
-    CardDescription,
+    CardTypeDescription,
+    DefaultCardConfig,
     Extra,
     ImageMagickCommands,
 )
-from modules.RemoteFile import RemoteFile
-from modules.Title import SplitCharacteristics
-
-if TYPE_CHECKING:
-    from app.yaml.font import Font
+from app.cards.loader import RemoteFile
+from app.info.episode import EpisodeInfo
+from app.schemas.base import BaseCardTypeCustomFontAllText
 
 
 class DawnTitleCard(BaseCardType):
@@ -28,7 +24,7 @@ class DawnTitleCard(BaseCardType):
     """
 
     """API Parameters"""
-    API_DETAILS = CardDescription(
+    API_DETAILS = CardTypeDescription(
         name='Dawn',
         identifier='Supremicus/DawnTitleCard',
         example=(
@@ -170,11 +166,11 @@ class DawnTitleCard(BaseCardType):
         title_text_horizontal_shift: int = 0
         episode_text_vertical_shift: int = 0
         episode_text_font: Union[
-            Literal['{title_font}'],
+            Literal['{font_file}'],
             str,
             Path
         ] = str(RemoteFile('Supremicus', 'ref/fonts/ExoSoft-Medium.ttf'))
-        episode_text_font_size: float = 1.0
+        episode_text_font_size: Annotated[float, Field(ge=0)] = 1.0
         episode_text_color: str | None = None
         episode_text_stroke_color: str | None = None
         episode_text_kerning: int = 18
@@ -183,11 +179,13 @@ class DawnTitleCard(BaseCardType):
         crt_overlay: Literal['nobezel', 'bezel'] | None = None
         crt_state_overlay: bool = False
         omit_gradient: bool = True
+        watched: bool = True
 
         @root_validator(skip_on_failure=True, allow_reuse=True)
         def validate_episode_text_font_file(cls, values: dict) -> dict:
             # Specified as "{title_font}" - use title font file
-            if (etf := values['episode_text_font']) == '{title_font}':
+            etf = values['episode_text_font']
+            if etf in ('{title_font}', '{font_file}'):
                 values['episode_text_font'] = values['font_file']
             # Episode text font does not exist, search alongside source image
             elif not (etf := Path(etf)).exists():
@@ -214,38 +212,30 @@ class DawnTitleCard(BaseCardType):
 
             return values
 
-    """Characteristics for title splitting by this class"""
-    TITLE_CHARACTERISTICS: SplitCharacteristics = {
-        'max_line_width': 28,
-        'max_line_count': 4,
-        'style': 'bottom',
-    }
-
-    """Characteristics of the default title font"""
-    TITLE_FONT = str(RemoteFile('Supremicus', 'ref/fonts/HelveticaNeue-Bold.ttf'))
-    TITLE_COLOR = 'white'
-    FONT_REPLACEMENTS = {}
-
-    """Whether this CardType uses season titles for archival purposes"""
-    USES_SEASON_TITLE = True
-
-    """Standard class has standard archive name"""
-    ARCHIVE_NAME = 'Dawn'
+    """Default configuration for this card type"""
+    TITLE_FONT = RemoteFile('Supremicus', 'ref/fonts/HelveticaNeue-Bold.ttf').resolve()
+    CardConfig = DefaultCardConfig(
+        font_file=TITLE_FONT,
+        font_color='white',
+        title_max_line_width=28,
+        title_max_line_count=4,
+        title_split_style='bottom',
+    )
 
     """Characteristics of episode text"""
     EPISODE_TEXT_FORMAT = 'EPISODE {to_cardinal(episode_number)}'
-    EPISODE_TEXT_FONT = RemoteFile('Supremicus', 'ref/fonts/ExoSoft-Medium.ttf')
+    EPISODE_TEXT_FONT = RemoteFile('Supremicus', 'ref/fonts/ExoSoft-Medium.ttf').resolve()
 
     """Source path for CRT overlays to be overlayed if enabled"""
-    __OVERLAY_PLAIN = RemoteFile('Supremicus', 'ref/overlays/overlay_plain.png')
-    __OVERLAY_PLAIN_BEZEL = RemoteFile('Supremicus', 'ref/overlays/overlay_plain_bezel.png')
-    __OVERLAY_PLAY = RemoteFile('Supremicus', 'ref/overlays/overlay_play.png')
-    __OVERLAY_PLAY_BEZEL = RemoteFile('Supremicus', 'ref/overlays/overlay_play_bezel.png')
-    __OVERLAY_REWIND = RemoteFile('Supremicus', 'ref/overlays/overlay_rewind.png')
-    __OVERLAY_REWIND_BEZEL = RemoteFile('Supremicus', 'ref/overlays/overlay_rewind_bezel.png')
+    __OVERLAY_PLAIN = str(RemoteFile('Supremicus', 'ref/overlays/overlay_plain.png'))
+    __OVERLAY_PLAIN_BEZEL = str(RemoteFile('Supremicus', 'ref/overlays/overlay_plain_bezel.png'))
+    __OVERLAY_PLAY = str(RemoteFile('Supremicus', 'ref/overlays/overlay_play.png'))
+    __OVERLAY_PLAY_BEZEL = str(RemoteFile('Supremicus', 'ref/overlays/overlay_play_bezel.png'))
+    __OVERLAY_REWIND = str(RemoteFile('Supremicus', 'ref/overlays/overlay_rewind.png'))
+    __OVERLAY_REWIND_BEZEL = str(RemoteFile('Supremicus', 'ref/overlays/overlay_rewind_bezel.png'))
 
     """Source path for the gradient image"""
-    __GRADIENT_IMAGE = RemoteFile('Supremicus', 'ref/overlays/gradient.png')
+    __GRADIENT_IMAGE = str(RemoteFile('Supremicus', 'ref/overlays/gradient.png'))
 
     __slots__ = (
         'source_file', 'output_file', 'title_text', 'season_text',
@@ -256,6 +246,7 @@ class DawnTitleCard(BaseCardType):
         'episode_text_vertical_shift', 'episode_text_font', 'episode_text_font_size',
         'episode_text_color', 'episode_text_stroke_color', 'episode_text_kerning', 
         'separator', 'h_align', 'crt_overlay', 'crt_state_overlay', 'omit_gradient'
+        'watched',
     )
 
     def __init__(self, *,
@@ -266,8 +257,8 @@ class DawnTitleCard(BaseCardType):
             episode_text: str,
             hide_season_text: bool = False,
             hide_episode_text: bool = False,
-            font_color: str = TITLE_COLOR,
-            font_file: str = TITLE_FONT,
+            font_color: str = CardConfig.font_color,
+            font_file: str = str(CardConfig.font_file),
             font_interline_spacing: int = 0,
             font_interword_spacing: int = 0,
             font_kerning: float = 1.0,
@@ -281,14 +272,15 @@ class DawnTitleCard(BaseCardType):
             episode_text_vertical_shift: int = 0,
             episode_text_font: Path = EPISODE_TEXT_FONT,
             episode_text_font_size: float = 1.0,
-            episode_text_color: str = None,
-            episode_text_stroke_color: str = None,
+            episode_text_color: str = CardConfig.font_color,
+            episode_text_stroke_color: str = 'black',
             episode_text_kerning: int = 18,
             separator: str = '•',
             h_align: Literal['left', 'center', 'right'] = 'left',
             crt_overlay: Literal['nobezel', 'bezel'] | None = None,
             crt_state_overlay: bool = False,
             omit_gradient: bool = True,
+            watched: bool = True,
             **unused,
         ) -> None:
         """Construct a new instance of this card."""
@@ -331,6 +323,7 @@ class DawnTitleCard(BaseCardType):
         self.crt_overlay = crt_overlay
         self.crt_state_overlay = crt_state_overlay
         self.omit_gradient = omit_gradient
+        self.watched = watched
 
 
     @property
@@ -442,7 +435,7 @@ class DawnTitleCard(BaseCardType):
         kerning = -1.25 * self.font_kerning
 
         return [
-            f'-font "{self.font_file.resolve()}"',
+            f'-font "{self.font_file}"',
             f'-kerning {kerning}',
             f'-interline-spacing {interline_spacing}',
             f'-interword-spacing {interword_spacing}',
@@ -507,7 +500,7 @@ class DawnTitleCard(BaseCardType):
             crt_overlay_image = self.__OVERLAY_PLAIN
 
         return [
-            f'"{crt_overlay_image.resolve()}"',
+            f'"{crt_overlay_image}"',
             f'-composite',
         ]
 
@@ -523,90 +516,9 @@ class DawnTitleCard(BaseCardType):
             return []
 
         return [
-            f'"{self.__GRADIENT_IMAGE.resolve()}"',
+            f'"{self.__GRADIENT_IMAGE}"',
             f'-composite',
         ]
-
-
-    @staticmethod
-    def modify_extras(
-            extras: dict,
-            custom_font: bool,
-            custom_season_titles: bool,
-        ) -> None:
-        """
-        Modify the given extras based on whether font or season titles
-        are custom.
-
-        Args:
-            extras: Dictionary to modify.
-            custom_font: Whether the font are custom.
-            custom_season_titles: Whether the season titles are custom.
-        """
-
-        # Generic font, reset custom episode text color
-        if not custom_font:
-            for extra in (
-                'episode_text_color',
-                'episode_text_font',
-                'episode_text_font_size',
-                'episode_text_kerning',
-                'episode_text_stroke_color',
-                'episode_text_vertical_shift',
-                'stroke_color',
-                'title_text_horizontal_shift',
-            ):
-                if extra in extras:
-                    del extras[extra]
-
-
-    @staticmethod
-    def is_custom_font(font: 'Font', extras: dict) -> bool:
-        """
-        Determine whether the given font characteristics constitute a
-        default or custom font.
-
-        Args:
-            font: The Font being evaluated.
-            extras: Dictionary of extras for evaluation.
-
-        Returns:
-            True if a custom font is indicated, False otherwise.
-        """
-
-        custom_extras = (
-            ('stroke_color' in extras
-                and extras['stroke_color'] != 'black')
-            or ('title_text_horizontal_shift' in extras
-                and extras['title_text_horizontal_shift'] != 0)
-            or ('episode_text_vertical_shift' in extras
-                and extras['episode_text_vertical_shift'] != 0)
-        )
-
-        return custom_extras or DawnTitleCard._is_custom_font(font)
-
-
-    @staticmethod
-    def is_custom_season_titles(
-            custom_episode_map: bool,
-            episode_text_format: str,
-        ) -> bool:
-        """
-        Determine whether the given attributes constitute custom or
-        generic season titles.
-
-        Args:
-            custom_episode_map: Whether the EpisodeMap was customized.
-            episode_text_format: The episode text format in use.
-
-        Returns:
-            True if custom season titles are indicated, False otherwise.
-        """
-
-        return (
-            custom_episode_map
-            or episode_text_format != DawnTitleCard.EPISODE_TEXT_FORMAT
-        )
 
 
     @staticmethod
