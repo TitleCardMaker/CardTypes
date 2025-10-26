@@ -17,7 +17,7 @@ def convert_to_dict(node: ast.expr):
 
     if isinstance(node, ast.Call):
         if (isinstance(node.func, ast.Name)
-            and node.func.id in ('CardDescription', 'Extra', 'dict')):
+            and node.func.id in ('CardTypeDescription', 'Extra', 'dict')):
             return {kw.arg: convert_to_dict(kw.value) for kw in node.keywords}
 
     if isinstance(node, ast.Dict):
