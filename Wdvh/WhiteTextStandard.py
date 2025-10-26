@@ -1,24 +1,22 @@
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from pydantic import FilePath
 
-from app.schemas.base import BaseCardTypeCustomFontAllText
-from modules.BaseCardType import (
+from app.cards.base import (
     BaseCardType,
+    CardTypeDescription,
+    DefaultCardConfig,
     ImageMagickCommands,
-    CardDescription,
 )
-from modules.RemoteFile import RemoteFile
-
-if TYPE_CHECKING:
-    from app.yaml.font import Font
+from app.cards.loader import RemoteFile
+from app.schemas.base import BaseCardTypeCustomFontAllText
 
 
 class WhiteTextStandard(BaseCardType):
     """WDVH's WhiteTextStandard card type."""
 
-    API_DETAILS =  CardDescription(
+    API_DETAILS =  CardTypeDescription(
         name='White Text Standard',
         identifier='Wdvh/WhiteTextStandard',
         example=(
@@ -42,25 +40,13 @@ class WhiteTextStandard(BaseCardType):
         font_file: FilePath
         separator: str = '•'
 
-    """Characteristics for title splitting by this class"""
-    TITLE_CHARACTERISTICS = {
-        'max_line_width': 32,
-        'max_line_count': 3,
-        'style': 'top',
-    }
-
-    """Default font and text color for episode title text"""
-    TITLE_FONT = str(RemoteFile('Wdvh', 'TerminalDosis-Bold.ttf'))
-    TITLE_COLOR = '#FFFFFF'
-
-    """Default characters to replace in the generic font"""
-    FONT_REPLACEMENTS = {}
-
-    """Whether this CardType uses season titles for archival purposes"""
-    USES_SEASON_TITLE = True
-
-    """Standard class has standard archive name"""
-    ARCHIVE_NAME = 'White Text Standard Style'
+    CardConfig = DefaultCardConfig(
+        font_file=RemoteFile('Wdvh', 'TerminalDosis-Bold.ttf').resolve(),
+        font_color='#FFFFFF',
+        title_max_line_width=32,
+        title_max_line_count=3,
+        title_split_style='top',
+    )
 
     """Source path for the gradient image overlayed over all title cards"""
     __GRADIENT_IMAGE = BaseCardType.BASE_REF_DIRECTORY / 'GRADIENT.png'
@@ -71,10 +57,21 @@ class WhiteTextStandard(BaseCardType):
     SERIES_COUNT_TEXT_COLOR = '#FFFFFF'
 
     __slots__ = (
-        'source_file', 'output_file', 'title', 'season_text', 'episode_text',
-        'font', 'font_size', 'title_color', 'hide_season', 'separator',
-        'vertical_shift', 'interline_spacing', 'kerning', 'stroke_width',
-        'hide_episode',
+        'source_file',
+        'output_file',
+        'title_text',
+        'season_text',
+        'episode_text',
+        'hide_season_text',
+        'hide_episode_text',
+        'font_color',
+        'font_file',
+        'font_interline_spacing',
+        'font_kerning',
+        'font_size',
+        'font_stroke_width',
+        'font_vertical_shift',
+        'separator',
     )
 
 
@@ -86,8 +83,8 @@ class WhiteTextStandard(BaseCardType):
             episode_text: str,
             hide_season_text: bool,
             hide_episode_text: bool,
-            font_color: str = TITLE_COLOR,
-            font_file: str = TITLE_FONT,
+            font_color: str = CardConfig.font_color,
+            font_file: str = str(CardConfig.font_file),
             font_interline_spacing: int = 0,
             font_kerning: float = 1.0,
             font_size: float = 1.0,
@@ -106,19 +103,19 @@ class WhiteTextStandard(BaseCardType):
         self.output_file = card_file
 
         # Ensure characters that need to be escaped are
-        self.title = self.image_magick.escape_chars(title_text)
+        self.title_text = self.image_magick.escape_chars(title_text)
         self.season_text = self.image_magick.escape_chars(season_text)
         self.episode_text = self.image_magick.escape_chars(episode_text)
-        self.hide_season = hide_season_text
-        self.hide_episode = hide_episode_text
+        self.hide_season_text = hide_season_text
+        self.hide_episode_text = hide_episode_text
 
-        self.font = font_file
-        self.interline_spacing = font_interline_spacing
-        self.kerning = font_kerning
+        self.font_color = font_color
+        self.font_file = font_file
+        self.font_interline_spacing = font_interline_spacing
+        self.font_kerning = font_kerning
         self.font_size = font_size
-        self.stroke_width = font_stroke_width
-        self.title_color = font_color
-        self.vertical_shift = font_vertical_shift
+        self.font_stroke_width = font_stroke_width
+        self.font_vertical_shift = font_vertical_shift
 
         self.separator = separator
 
@@ -128,14 +125,14 @@ class WhiteTextStandard(BaseCardType):
         """ImageMagick commands to add title text."""
 
         font_size = 180 * self.font_size
-        interline_spacing = -70 + self.interline_spacing
-        kerning = -1.25 * self.kerning
-        stroke_width = 4.0 * self.stroke_width
-        vertical_shift = 145 + self.vertical_shift
+        interline_spacing = -70 + self.font_interline_spacing
+        kerning = -1.25 * self.font_kerning
+        stroke_width = 4.0 * self.font_stroke_width
+        vertical_shift = 145 + self.font_vertical_shift
 
         return [
             # Global effects
-            f'-font "{self.font}"',
+            f'-font "{self.font_file}"',
             f'-kerning {kerning}',
             f'-interword-spacing 50',
             f'-interline-spacing {interline_spacing}',
@@ -145,10 +142,10 @@ class WhiteTextStandard(BaseCardType):
             f'-fill white',
             f'-stroke "#062A40"',
             f'-strokewidth {stroke_width}',
-            f'-annotate +0+{vertical_shift} "{self.title}"',
+            f'-annotate +0+{vertical_shift} "{self.title_text}"',
             # Normal text
-            f'-fill "{self.title_color}"',
-            f'-annotate +0+{vertical_shift} "{self.title}"',
+            f'-fill "{self.font_color}"',
+            f'-annotate +0+{vertical_shift} "{self.title_text}"',
         ]
 
 
@@ -160,13 +157,13 @@ class WhiteTextStandard(BaseCardType):
         """
 
         # All text is hidden, return empty commands
-        if self.hide_season and self.hide_episode:
+        if self.hide_season_text and self.hide_episode_text:
             return []
 
         # Determine which text to add
-        if self.hide_season:
+        if self.hide_season_text:
             index_text = self.episode_text
-        elif self.hide_episode:
+        elif self.hide_episode_text:
             index_text = self.season_text
         else:
             index_text = (
@@ -188,53 +185,6 @@ class WhiteTextStandard(BaseCardType):
             f'-strokewidth 2',
             f'-annotate +0+800 "{index_text}"',
         ]
-
-
-    @staticmethod
-    def is_custom_font(font: 'Font') -> bool:
-        """
-        Determines whether the given font characteristics constitute a
-        default or custom font.
-        
-        Args:
-            font: The Font being evaluated.
-        
-        Returns:
-            True if a custom font is indicated, False otherwise.
-        """
-
-        return (
-            font.color != WhiteTextStandard.TITLE_COLOR
-            or font.file != WhiteTextStandard.TITLE_FONT
-            or font.kerning != 1.0
-            or font.interline_spacing != 0
-            or font.size != 1.0
-            or font.stroke_width != 1.0
-            or font.vertical_shift != 0
-        )
-
-
-    @staticmethod
-    def is_custom_season_titles(
-            custom_episode_map: bool,
-            episode_text_format: str,
-        ) -> bool:
-        """
-        Determines whether the given attributes constitute custom or
-        generic season titles.
-        
-        Args:
-            custom_episode_map: Whether the EpisodeMap was customized.
-            episode_text_format: The episode text format in use.
-        
-        Returns:
-            True if custom season title are indicated. False otherwise.
-        """
-
-        return (
-            custom_episode_map
-            or episode_text_format != WhiteTextStandard.EPISODE_TEXT_FORMAT
-        )
 
 
     def create(self) -> None:
