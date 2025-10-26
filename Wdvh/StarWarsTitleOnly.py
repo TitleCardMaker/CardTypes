@@ -1,16 +1,11 @@
 from pathlib import Path
-from typing import Literal, Optional, TYPE_CHECKING
+from typing import Annotated, Any
 
-from pydantic import constr
+from pydantic import StringConstraints
 
+from app.cards.base import BaseCardType, CardTypeDescription, DefaultCardConfig
+from app.cards.loader import RemoteFile
 from app.schemas.card_type import BaseCardTypeCustomFontNoText
-from modules.BaseCardType import BaseCardType, CardDescription
-from app.logging.logger import log
-from modules.RemoteFile import RemoteFile
-
-if TYPE_CHECKING:
-    from app.models.preferences import Preferences
-    from modules.Font import Font
 
 
 class StarWarsTitleOnly(BaseCardType):
@@ -19,7 +14,7 @@ class StarWarsTitleOnly(BaseCardType):
     of the Star Wars card.
     """
 
-    API_DETAILS = CardDescription(
+    API_DETAILS = CardTypeDescription(
         name='Star Wars (Title Only)',
         identifier='Wdvh/StarWarsTitleOnly',
         example=(
@@ -40,36 +35,21 @@ class StarWarsTitleOnly(BaseCardType):
     )
 
     class CardModel(BaseCardTypeCustomFontNoText):
-        title_text: constr(to_upper=True)
+        title_text: Annotated[str, StringConstraints(to_upper=True)]
         font_color: str = '#DAC960'
 
     """Directory where all reference files used by this card are stored"""
     REF_DIRECTORY = Path(__file__).parent.parent / 'ref' / 'star_wars'
 
-    """Characteristics for title splitting by this class"""
-    TITLE_CHARACTERISTICS = {
-        'max_line_width': 16,
-        'max_line_count': 5,
-        'style': 'top',
-    }
-
-    """How to name archive directories for this type of card"""
-    ARCHIVE_NAME = 'Star Wars Title Only Style'
-
-    """Path to the font to use for the episode title"""
-    TITLE_FONT = str((REF_DIRECTORY/'Monstice-Base.ttf').resolve())
-
-    """Color to use for the episode title"""
-    TITLE_COLOR = '#DAC960'
-
-    """Default episode text format string"""
-    EPISODE_TEXT_FORMAT = ' '
-
-    """Standard font replacements for the title font"""
-    FONT_REPLACEMENTS = {'Ō': 'O', 'ō': 'o'}
-
-    """Whether this class uses season titles for the purpose of archives"""
-    USES_SEASON_TITLE = False
+    CardConfig = DefaultCardConfig(
+        font_file=REF_DIRECTORY / 'Monstice-Base.ttf',
+        font_color='#DAC960',
+        font_replacements={'Ō': 'O', 'ō': 'o'},
+        title_max_line_width=16,
+        title_max_line_count=5,
+        title_split_style='top',
+        episode_text_format=' ',
+    )
 
     """Path to the reference star image to overlay on all source images"""
     __STAR_GRADIENT_IMAGE = RemoteFile('Wdvh', 'star_gradient_title_only.png')
@@ -83,8 +63,7 @@ class StarWarsTitleOnly(BaseCardType):
             title_text: str,
             blur: bool = False,
             grayscale: bool = False,
-            preferences: Optional['Preferences'] = None,
-            **unused,
+            **unused: Any,
         ) -> None:
         """Initialize this CardType object."""
         
@@ -95,46 +74,10 @@ class StarWarsTitleOnly(BaseCardType):
         self.title = self.image_magick.escape_chars(title_text)
 
 
-    @staticmethod
-    def is_custom_font(font: 'Font') -> Literal[False]:
-        """
-        Determines whether the given font characteristics constitute a
-        default or custom font.
-        
-        Args:
-            font: The Font being evaluated.
-        
-        Returns:
-            False, as custom fonts are not used.
-        """
-
-        return False
-
-
-    @staticmethod
-    def is_custom_season_titles(
-            custom_episode_map: bool,
-            episode_text_format: str,
-        ) -> Literal[False]:
-        """
-        Determines whether the given attributes constitute custom or
-        generic season titles.
-        
-        Args:
-            custom_episode_map: Whether the EpisodeMap was customized.
-            episode_text_format: The episode text format in use.
-        
-        Returns:
-            False. Custom season titles are not used.
-        """
-        
-        return False
-
-
     def create(self) -> None:
         """Create this object's defined title card."""
 
-        command = ' '.join([
+        self.image_magick.run([
             f'convert "{self.source_file.resolve()}"',
             # Resize input and apply any style modifiers
             *self.resize_and_style,
@@ -142,12 +85,12 @@ class StarWarsTitleOnly(BaseCardType):
             f'"{self.__STAR_GRADIENT_IMAGE.resolve()}"',
             f'-composite',
             # Add title text
-            f'-font "{self.TITLE_FONT}"',
+            f'-font "{self.CardConfig.font_file.resolve()}"',
             f'-gravity northwest',
             f'-pointsize 124',
             f'-kerning 0.5',
             f'-interline-spacing 20',
-            f'-fill "{self.TITLE_COLOR}"',
+            f'-fill "{self.CardConfig.font_color}"',
             f'-annotate +320+1529 "{self.title}"',
             # Attempt to overlay mask
             *self.add_overlay_mask(self.source_file),
@@ -155,5 +98,3 @@ class StarWarsTitleOnly(BaseCardType):
             *self.resize_output,
             f'"{self.output_file.resolve()}"',
         ])
-
-        self.image_magick.run(command)
