@@ -1,20 +1,16 @@
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Self
+from typing import Any, Self
 
+from app.cards.loader import RemoteFile
 from pydantic import model_validator
 
-from app.logging.logger import log
-from app.schemas.base import BaseCardTypeCustomFontNoText
-from modules.BaseCardType import (
+from app.cards.base import (
     BaseCardType,
-    CardDescription,
+    CardTypeDescription,
+    DefaultCardConfig,
     ImageMagickCommands,
 )
-from modules.RemoteFile import RemoteFile
-from modules.Title import SplitCharacteristics
-
-if TYPE_CHECKING:
-    from app.yaml.font import Font
+from app.schemas.base import BaseCardTypeCustomFontNoText
 
 
 class WhiteTextBroadcast(BaseCardType):
@@ -24,7 +20,7 @@ class WhiteTextBroadcast(BaseCardType):
     numbering
     """
 
-    API_DETAILS =  CardDescription(
+    API_DETAILS = CardTypeDescription(
         name='White Text Broadcast',
         identifier='lyonza/WhiteTextBroadcast',
         example=(
@@ -58,30 +54,20 @@ class WhiteTextBroadcast(BaseCardType):
     """Directory where all reference files used by this card are stored"""
     REF_DIRECTORY = Path(__file__).parent.parent / 'ref'
 
-    """Characteristics for title splitting by this class"""
-    TITLE_CHARACTERISTICS: SplitCharacteristics = {
-        'max_line_width': 32,
-        'max_line_count': 3,
-        'style': 'bottom',
-    }
+    """Default configuration for this card type"""
+    TITLE_FONT = RemoteFile('lyonza', 'TerminalDosis-Bold.ttf').resolve()
+    CardConfig = DefaultCardConfig(
+        font_file=TITLE_FONT,
+        font_color='#FFFFFF',
+        font_replacements={
+            '[': '(', ']': ')', '(': '[', ')': ']', '―': '-', '…': '...'
+        },
+        title_max_line_width=32,
+        title_max_line_count=3,
+        title_split_style='bottom',
+        episode_text_format='S{season_number:02}E{episode_number:02}',
+    )
 
-    """Default font and text color for episode title text"""
-    TITLE_FONT = str(RemoteFile('lyonza', 'TerminalDosis-Bold.ttf'))
-    TITLE_COLOR = '#FFFFFF'
-
-    """Default characters to replace in the generic font"""
-    FONT_REPLACEMENTS = {
-        '[': '(', ']': ')', '(': '[', ')': ']', '―': '-', '…': '...'
-    }
-
-    """Whether this CardType uses season titles for archival purposes"""
-    USES_SEASON_TITLE = True
-
-    """Standard class has standard archive name"""
-    ARCHIVE_NAME = 'Broadcast Ordering Style'
-    
-    EPISODE_TEXT_FORMAT = "S{season_number:02}E{episode_number:02}"
-    
     """Source path for the gradient image overlayed over all title cards"""
     __GRADIENT_IMAGE = RemoteFile('lyonza', 'GRADIENTABS.png')
 
@@ -104,8 +90,8 @@ class WhiteTextBroadcast(BaseCardType):
             title_text: str,
             episode_text: str,
             hide_episode_text: bool = False,
-            font_color: str = TITLE_COLOR,
-            font_file: str = TITLE_FONT,
+            font_color: str = CardConfig.font_color,
+            font_file: str = str(CardConfig.font_file),
             font_interline_spacing: int = 0,
             font_kerning: float = 1.0,
             font_size: float,
@@ -195,50 +181,6 @@ class WhiteTextBroadcast(BaseCardType):
             f'-strokewidth 0.75',
             f'-annotate +100-750 "{self.episode_text}"',
         ]
-
-
-    @staticmethod
-    def is_custom_font(font: 'Font') -> bool:
-        """
-        Determines whether the given font characteristics constitute a
-        default or custom font.
-        
-        Args:
-            font: The Font being evaluated.
-        
-        Returns:
-            True if a custom font is indicated, False otherwise.
-        """
-
-        return (
-            font.color != WhiteTextBroadcast.TITLE_COLOR
-            or font.file != WhiteTextBroadcast.TITLE_FONT
-            or font.interline_spacing != 0
-            or font.kerning != 1.0
-            or font.size != 1.0
-            or font.stroke_width != 1.0
-            or font.vertical_shift != 0
-        )
-
-
-    @staticmethod
-    def is_custom_season_titles(
-            custom_episode_map: bool,
-            episode_text_format: str,
-        ) -> bool:
-        """
-        Determines whether the given attributes constitute custom or
-        generic season titles.
-        
-        Args:
-            custom_episode_map: Whether the EpisodeMap was customized.
-            episode_text_format: The episode text format in use.
-        
-        Returns:
-            False. Custom season titles are not used.
-        """
-
-        return False
 
 
     def create(self) -> None:
