@@ -1,24 +1,21 @@
 from pathlib import Path
-from typing import Literal, TYPE_CHECKING, Self
+from typing import Annotated, Any, Literal, Self
 
-from pydantic import constr, model_validator, Field
+from pydantic import StringConstraints, model_validator
 
-from app.schemas.base import BaseCardTypeCustomFontNoText
-from modules.BaseCardType import (
+from app.cards.base import (
     BaseCardType,
-    CardDescription,
+    CardTypeDescription,
+    DefaultCardConfig,
     Extra,
     ImageMagickCommands,
 )
-from modules.RemoteFile import RemoteFile
-from modules.Title import SplitCharacteristics
-
-if TYPE_CHECKING:
-    from app.yaml.font import Font
+from app.cards.loader import RemoteDirectory
+from app.schemas.base import BaseCardTypeCustomFontNoText
 
 
-OverrideBw = Literal['bw', 'color']
-OverrideStyle = Literal['rewind', 'play']
+type OverrideBw = Literal['bw', 'color']
+type OverrideStyle = Literal['rewind', 'play']
 
 
 class RetroTitleCard(BaseCardType):
@@ -27,7 +24,7 @@ class RetroTitleCard(BaseCardType):
     is retro-themed, and features either a Rewind/Play overlay.
     """
 
-    API_DETAILS = CardDescription(
+    API_DETAILS = CardTypeDescription(
         name='Retro',
         identifier='Yozora/RetroTitleCard',
         example=(
@@ -45,7 +42,10 @@ class RetroTitleCard(BaseCardType):
                 name="Black & White Override",
                 identifier="override_bw",
                 description="Override the Black & White modification",
-                tooltip="Either <v>bw</v>, or <v>color</v> to force the black and white or color effects."
+                tooltip=(
+                    'Either <v>bw</v>, or <v>color</v> to force the black and '
+                    'white or color effects.'
+                )
             ),
             Extra(
                 name="Style Override",
@@ -63,7 +63,7 @@ class RetroTitleCard(BaseCardType):
 
     class CardModel(BaseCardTypeCustomFontNoText):
         title_text: str
-        episode_text: str = Field(to_upper=True)
+        episode_text: Annotated[str, StringConstraints(to_upper=True)]
         hide_episode_text: bool = False
         watched: bool = True
         override_bw: OverrideBw | None = None
@@ -77,36 +77,28 @@ class RetroTitleCard(BaseCardType):
 
     """Directory where all reference files used by this card are stored"""
     REF_DIRECTORY = Path(__file__).parent.parent / 'ref' / 'retro'
+    REMOTE_DIRECTORY = RemoteDirectory('Yozora', 'ref/retro')
 
-    """Characteristics for title splitting by this class"""
-    TITLE_CHARACTERISTICS: SplitCharacteristics = {
-        'max_line_width': 32,
-        'max_line_count': 3,
-        'style': 'bottom',
-    }
+    """Default configuration for this card type"""
+    CardConfig = DefaultCardConfig(
+        font_file=(REMOTE_DIRECTORY / 'retro.ttf').resolve(),
+        font_color='#FFFFFF',
+        font_replacements={
+            '[': '(', ']': ')', '(': '[', ')': ']', '―': '-', '…': '...'
+        },
+        title_max_line_width=32,
+        title_max_line_count=3,
+        title_split_style='bottom',
+        episode_text_format='S{season_number:02}E{episode_number:02}',
+    )
 
-    """Default font characteristics for the title text"""
-    TITLE_FONT = str(RemoteFile('Yozora', 'ref/retro/retro.ttf'))
-    TITLE_COLOR = '#FFFFFF'
-    FONT_REPLACEMENTS = {
-        '[': '(', ']': ')', '(': '[', ')': ']', '―': '-', '…': '...'
-    }
-
-    """Whether this CardType uses season titles for archival purposes"""
-    USES_SEASON_TITLE = True
-
-    """Standard class has standard archive name"""
-    ARCHIVE_NAME = 'Retro Style'
-    
-    EPISODE_TEXT_FORMAT = "S{season_number:02}E{episode_number:02}"
-    
     """Source path for the gradient image overlayed over all title cards"""
-    __GRADIENT_IMAGE_PLAY = RemoteFile('Yozora', 'ref/retro/gradient_play.png')
-    __GRADIENT_IMAGE_REWIND = RemoteFile('Yozora', 'ref/retro/gradient_rewind.png')
+    __GRADIENT_IMAGE_PLAY = REMOTE_DIRECTORY / 'gradient_play.png'
+    __GRADIENT_IMAGE_REWIND = REMOTE_DIRECTORY / 'gradient_rewind.png'
 
     """Default fonts and color for series count text"""
-    SEASON_COUNT_FONT = RemoteFile('Yozora', 'ref/retro/retro.ttf')
-    EPISODE_COUNT_FONT = RemoteFile('Yozora', 'ref/retro/retro.ttf')
+    SEASON_COUNT_FONT = REMOTE_DIRECTORY / 'retro.ttf'
+    EPISODE_COUNT_FONT = REMOTE_DIRECTORY / 'retro.ttf'
     SERIES_COUNT_TEXT_COLOR = '#FFFFFF'
 
     __slots__ = (
@@ -123,8 +115,8 @@ class RetroTitleCard(BaseCardType):
             title_text: str,
             episode_text: str,
             hide_episode_text: bool = False,
-            font_color: str = TITLE_COLOR,
-            font_file: str = TITLE_FONT,
+            font_color: str = CardConfig.font_color,
+            font_file: str = str(CardConfig.font_file),
             font_interline_spacing: int = 0,
             font_kerning: float = 1.0,
             font_size: float = 1.0,
@@ -135,7 +127,7 @@ class RetroTitleCard(BaseCardType):
             grayscale: bool = False,
             override_bw: OverrideBw | None = None,
             override_style: OverrideStyle | None = None,
-            **unused,
+            **unused: Any,
         ) -> None:
 
         # Initialize the parent class - this sets up an ImageMagickInterface
@@ -242,50 +234,6 @@ class RetroTitleCard(BaseCardType):
             f'-strokewidth 0.75',
             f'-annotate +200+229 "{self.episode_text}"',
         ]
-
-
-    @staticmethod
-    def is_custom_font(font: 'Font') -> bool:
-        """
-        Determines whether the given font characteristics constitute a
-        default or custom font.
-        
-        Args:
-            font: The Font being evaluated.
-        
-        Returns:
-            True if a custom font is indicated, False otherwise.
-        """
-
-        return (
-            font.color != RetroTitleCard.TITLE_COLOR
-            or font.file != RetroTitleCard.TITLE_FONT
-            or font.interline_spacing != 0
-            or font.kerning != 1.0
-            or font.size != 1.0
-            or font.stroke_width != 1.0
-            or font.vertical_shift != 0
-        )
-
-
-    @staticmethod
-    def is_custom_season_titles(
-            custom_episode_map: bool,
-            episode_text_format: str,
-        ) -> bool:
-        """
-        Determines whether the given attributes constitute custom or
-        generic season titles.
-        
-        Args:
-            custom_episode_map: Whether the EpisodeMap was customized.
-            episode_text_format: The episode text format in use.
-        
-        Returns:
-            False, as custom season titles are not used.
-        """
-
-        return False
 
 
     def create(self) -> None:
