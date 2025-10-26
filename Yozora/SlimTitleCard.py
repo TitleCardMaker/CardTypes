@@ -1,19 +1,15 @@
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Any
 
-from app.logging.logger import log
-from app.schemas.base import BaseCardTypeCustomFontAllText
-from modules.BaseCardType import (
+from app.cards.base import (
     BaseCardType,
-    CardDescription,
+    CardTypeDescription,
+    DefaultCardConfig,
     Extra,
     ImageMagickCommands,
 )
-from modules.RemoteFile import RemoteFile
-from modules.Title import SplitCharacteristics
-
-if TYPE_CHECKING:
-    from app.yaml.font import Font
+from app.cards.loader import RemoteDirectory
+from app.schemas.base import BaseCardTypeCustomFontAllText
 
 
 class SlimTitleCard(BaseCardType):
@@ -22,7 +18,7 @@ class SlimTitleCard(BaseCardType):
     down margins to save space.
     """
 
-    API_DETAILS = CardDescription(
+    API_DETAILS = CardTypeDescription(
         name='Slim',
         identifier='Yozora/SlimTitleCard',
         example=(
@@ -55,35 +51,26 @@ class SlimTitleCard(BaseCardType):
 
     """Directory where all reference files used by this card are stored"""
     REF_DIRECTORY = Path(__file__).parent.parent / 'ref'
+    REMOTE_DIRECTORY = RemoteDirectory('Yozora', 'ref/slim')
 
-    """Characteristics for title splitting by this class"""
-    TITLE_CHARACTERISTICS: SplitCharacteristics = {
-        'max_line_width': 45,
-        'max_line_count': 3,
-        'style': 'bottom',
-    }
-
-    """Default font and text color for episode title text"""
-    TITLE_FONT = str(RemoteFile('Yozora', 'ref/slim/Comfortaa-Regular.ttf'))
-    TITLE_COLOR = '#FFFFFF'
-
-    """Default characters to replace in the generic font"""
-    FONT_REPLACEMENTS = {
-        '…': '...', '[': '(', ']': ')', '(': '[', ')': ']', '―': '-'
-    }
-
-    """Whether this CardType uses season titles for archival purposes"""
-    USES_SEASON_TITLE = True
-
-    """Slim class has specialized archive name"""
-    ARCHIVE_NAME = 'Slim Style'
+    """Default configuration for this card type"""
+    CardConfig = DefaultCardConfig(
+        font_file=(REMOTE_DIRECTORY / 'Comfortaa-Regular.ttf').resolve(),
+        font_color='#FFFFFF',
+        font_replacements={
+            '…': '...', '[': '(', ']': ')', '(': '[', ')': ']', '―': '-'
+        },
+        title_max_line_width=45,
+        title_max_line_count=3,
+        title_split_style='bottom',
+    )
 
     """Source path for the gradient image overlayed over all title cards"""
-    __GRADIENT_IMAGE = RemoteFile('Yozora', 'ref/slim/GRADIENT.png')
+    __GRADIENT_IMAGE = REMOTE_DIRECTORY / 'GRADIENT.png'
 
     """Default fonts and color for series count text"""
-    SEASON_COUNT_FONT = RemoteFile('Yozora', 'ref/slim/Comfortaa-SemiBold.ttf')
-    EPISODE_COUNT_FONT = RemoteFile('Yozora', 'ref/slim/Comfortaa-Regular.ttf')
+    SEASON_COUNT_FONT = REMOTE_DIRECTORY / 'Comfortaa-SemiBold.ttf'
+    EPISODE_COUNT_FONT = REMOTE_DIRECTORY / 'Comfortaa-Regular.ttf'
     SERIES_COUNT_TEXT_COLOR = '#a5a5a5'
 
     __slots__ = (
@@ -102,8 +89,8 @@ class SlimTitleCard(BaseCardType):
             episode_text: str,
             hide_season_text: bool = False,
             hide_episode_text: bool = False,
-            font_color: str = TITLE_COLOR,
-            font_file: str = TITLE_FONT,
+            font_color: str = CardConfig.font_color,
+            font_file: str = str(CardConfig.font_file),
             font_interline_spacing: int = 0,
             font_kerning: float = 1.0,
             font_size: float = 1.0,
@@ -112,7 +99,7 @@ class SlimTitleCard(BaseCardType):
             blur: bool = False,
             grayscale: bool = False,
             omit_gradient: bool = False,
-            **unused,
+            **unused: Any,
         ) -> None:
         
         # Initialize the parent class - this sets up an ImageMagickInterface
@@ -265,87 +252,38 @@ class SlimTitleCard(BaseCardType):
             f'+interword-spacing',
             f'-gravity south',
             fr'\(',
-            *self.__series_count_text_global_effects,
-            *self.__series_count_text_black_stroke,
-            f'-font "{self.SEASON_COUNT_FONT}"',
-            f'label:"{self.season_text}"',
-            f'label:"• "',
-            f'-font "{self.EPISODE_COUNT_FONT}"',
-            f'label:"{self.episode_text}"',
-            f'+smush 15',
+                *self.__series_count_text_global_effects,
+                *self.__series_count_text_black_stroke,
+                f'-font "{self.SEASON_COUNT_FONT}"',
+                f'label:"{self.season_text}"',
+                f'label:"• "',
+                f'-font "{self.EPISODE_COUNT_FONT}"',
+                f'label:"{self.episode_text}"',
+                f'+smush 15',
             fr'\)',
             f'-geometry +0+35',
             f'-composite',
 
             fr'\(',
-            *self.__series_count_text_global_effects,
-            *self.__series_count_text_effects,
-            f'-font "{self.SEASON_COUNT_FONT}"',
-            f'label:"{self.season_text}"',
-            f'label:"• "',
-            f'-font "{self.EPISODE_COUNT_FONT}"',
-            f'label:"{self.episode_text}"',
-            f'+smush 18',
+                *self.__series_count_text_global_effects,
+                *self.__series_count_text_effects,
+                f'-font "{self.SEASON_COUNT_FONT}"',
+                f'label:"{self.season_text}"',
+                f'label:"• "',
+                f'-font "{self.EPISODE_COUNT_FONT}"',
+                f'label:"{self.episode_text}"',
+                f'+smush 18',
             fr'\)',
             f'-geometry +0+35',
             f'-composite',
         ]
 
 
-    @staticmethod
-    def is_custom_font(font: 'Font') -> bool:
-        """
-        Determines whether the given font characteristics constitute a
-        default or custom font.
-        
-        Args:
-            font: The Font being evaluated.
-        
-        Returns:
-            True if a custom font is indicated, False otherwise.
-        """
-
-        return (
-            font.color != SlimTitleCard.TITLE_COLOR
-            or font.file != SlimTitleCard.TITLE_FONT
-            or font.interline_spacing != 0
-            or font.kerning != 1.0
-            or font.size != 1.0
-            or font.stroke_width != 1.0
-            or font.vertical_shift != 0
-        )
-
-
-    @staticmethod
-    def is_custom_season_titles(
-            custom_episode_map: bool,
-            episode_text_format: str,
-        ) -> bool:
-        """
-        Determines whether the given attributes constitute custom or
-        generic season titles.
-        
-        Args:
-            custom_episode_map: Whether the EpisodeMap was customized.
-            episode_text_format: The episode text format in use.
-        
-        Returns:
-            True if custom season titles are indicated, False otherwise.
-        """
-
-        # Nonstandard episode text format
-        if episode_text_format != 'EPISODE {episode_number}':
-            return True
-
-        return custom_episode_map
-
-
     def create(self) -> None:
         """Create this object's defined title card."""
 
-        if self.omit_gradient:
-            gradient_command = []
-        else:
+        gradient_command = []
+        if not self.omit_gradient:
             gradient_command = [
                 f'"{self.__GRADIENT_IMAGE.resolve()}"',
                 f'-composite',
