@@ -1,7 +1,6 @@
 import ast
 from hashlib import md5
 import json
-import os
 from pathlib import Path
 import re
 
@@ -41,7 +40,7 @@ def extract_card_details(file_path: Path):
 
     # Regex pattern to find the API_DETAILS assignment
     content = file_path.read_text()
-    match = re.search(r'(\w+)\s*=\s*CardDescription\((.*?)\n\s{4}\)', content, re.DOTALL)
+    match = re.search(r'(\w+)\s*=\s*CardTypeDescription\((.*?)\n\s{4}\)', content, re.DOTALL)
     if not match:
         return None
     
@@ -50,7 +49,7 @@ def extract_card_details(file_path: Path):
     try:
         # Redifine the CardDescription and Extra objects as dictionaries
         final_card_data = (
-            f'CardDescription = dict\nExtra = dict\nCardDescription({card_data})'
+            f'CardTypeDescription = dict\nExtra = dict\nCardTypeDescription({card_data})'
         )
         nodes = ast.parse(final_card_data)
         return convert_to_dict(nodes.body[2].value)
