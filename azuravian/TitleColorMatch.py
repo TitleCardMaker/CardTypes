@@ -58,7 +58,7 @@ class TitleColorMatch(BaseCardType):
         omit_gradient: bool = False
 
     """Directory where all reference files used by this card are stored"""
-    REF_DIRECTORY = Path(__file__).parent.parent / 'ref'
+    REF_DIRECTORY = BaseCardType.BASE_REF_DIRECTORY / 'standard'
 
     CardConfig = DefaultCardConfig(
         font_file=REF_DIRECTORY / 'Sequel-Neue.otf',
