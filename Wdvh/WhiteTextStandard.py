@@ -49,11 +49,12 @@ class WhiteTextStandard(BaseCardType):
     )
 
     """Source path for the gradient image overlayed over all title cards"""
-    __GRADIENT_IMAGE = BaseCardType.BASE_REF_DIRECTORY / 'GRADIENT.png'
+    REF_DIRECTORY = BaseCardType.BASE_REF_DIRECTORY / 'standard'
+    __GRADIENT_IMAGE = REF_DIRECTORY / 'gradient.png'
 
     """Default fonts and color for series count text"""
-    SEASON_COUNT_FONT = BaseCardType.BASE_REF_DIRECTORY / 'Sequel-Neue.otf'
-    EPISODE_COUNT_FONT = BaseCardType.BASE_REF_DIRECTORY / 'Sequel-Neue.otf'
+    SEASON_COUNT_FONT = REF_DIRECTORY / 'Sequel-Neue.otf'
+    EPISODE_COUNT_FONT = REF_DIRECTORY / 'Sequel-Neue.otf'
     SERIES_COUNT_TEXT_COLOR = '#FFFFFF'
 
     __slots__ = (
