@@ -28,10 +28,8 @@ class RetroTitleCard(BaseCardType):
         name='Retro',
         identifier='Yozora/RetroTitleCard',
         example=(
-            'https://camo.githubusercontent.com/bb6308801194ee20a369080'
-            'a2d1830c19a63685fab304aa814f0faa1dded2caf/68747470733a2f2f'
-            '692e6962622e636f2f30746e4a4a36502f537472616e6765722d546869'
-            '6e67732d323031362d5330332d4530322e6a7067'
+            'https://raw.githubusercontent.com/TitleCardMaker/CardTypes/refs/'
+            'heads/main/Yozora/RetroTitleCard.preview.webp'
         ),
         creators=['Yozora', 'CollinHeist'],
         source='remote',

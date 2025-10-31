@@ -22,11 +22,8 @@ class SlimTitleCard(BaseCardType):
         name='Slim',
         identifier='Yozora/SlimTitleCard',
         example=(
-            'https://camo.githubusercontent.com/8eb09f530888a23bc9279f26fff0d'
-            '6ee0ea82f998137560f24f042bb9a0e4639/68747470733a2f2f63646e2e6469'
-            '73636f72646170702e636f6d2f6174746163686d656e74732f39373531303830'
-            '33333533313231393937392f3937373631343933373435373330333630322f53'
-            '30314530342e6a7067'
+            'https://raw.githubusercontent.com/TitleCardMaker/CardTypes/refs/'
+            'heads/main/Yozora/SlimTitleCard.preview.webp'
         ),
         creators=['Yozora', 'CollinHeist'],
         source='remote',
