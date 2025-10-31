@@ -222,7 +222,7 @@
     {
         "name": "Retro",
         "identifier": "Yozora/RetroTitleCard",
-        "example": "https://camo.githubusercontent.com/bb6308801194ee20a369080a2d1830c19a63685fab304aa814f0faa1dded2caf/68747470733a2f2f692e6962622e636f2f30746e4a4a36502f537472616e6765722d5468696e67732d323031362d5330332d4530322e6a7067",
+        "example": "https://raw.githubusercontent.com/TitleCardMaker/CardTypes/refs/heads/main/Yozora/RetroTitleCard.preview.webp",
         "creators": [
             "Yozora",
             "CollinHeist"
@@ -247,7 +247,7 @@
             "Card type featuring a VHS/Camcorder inspired overlay. The 'Play' ",
             "button can be set to 'Rewind' and the image greyscaled when the item has been played."
         ],
-        "hash": "0dbe6e6a872f9c55f5e4ab55bdc544dd"
+        "hash": "0300f20f45e8b95e7aca7769703aac4a"
     },
     {
         "name": "SciFi",
@@ -339,7 +339,7 @@
     {
         "name": "Slim",
         "identifier": "Yozora/SlimTitleCard",
-        "example": "https://camo.githubusercontent.com/8eb09f530888a23bc9279f26fff0d6ee0ea82f998137560f24f042bb9a0e4639/68747470733a2f2f63646e2e646973636f72646170702e636f6d2f6174746163686d656e74732f3937353130383033333533313231393937392f3937373631343933373435373330333630322f5330314530342e6a7067",
+        "example": "https://raw.githubusercontent.com/TitleCardMaker/CardTypes/refs/heads/main/Yozora/SlimTitleCard.preview.webp",
         "creators": [
             "Yozora",
             "CollinHeist"
@@ -357,7 +357,7 @@
         "description": [
             "Card type closely following the Standard Title Card but with slimmed down margins to save space."
         ],
-        "hash": "45cb7ae1b0bcef133b6e9ff7888028f3"
+        "hash": "865676c2d4629132a79316a9ae0509fa"
     },
     {
         "name": "Star Wars (Title Only)",
