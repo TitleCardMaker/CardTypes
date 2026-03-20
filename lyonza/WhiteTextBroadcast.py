@@ -1,0 +1,209 @@
+from pathlib import Path
+from typing import Any, Self
+
+from app.cards.loader import RemoteFile
+from pydantic import model_validator
+
+from app.cards.base import (
+    BaseCardType,
+    CardTypeDescription,
+    DefaultCardConfig,
+    ImageMagickCommands,
+)
+from app.schemas.base import BaseCardTypeCustomFontNoText
+
+
+class WhiteTextBroadcast(BaseCardType):
+    """
+    This class describes lyonza's CardType based on Wvdh's
+    "WhiteTextBroadcast" card to show SxxExx format instead of absolute
+    numbering
+    """
+
+    API_DETAILS = CardTypeDescription(
+        name='White Text Broadcast',
+        identifier='lyonza/WhiteTextBroadcast',
+        example=(
+            'https://user-images.githubusercontent.com/1803189/171089736-'
+            'f60a6ff2-0914-432a-a45d-145323d39c42.jpg'
+        ),
+        creators=['lyonza', 'Wdvh', 'CollinHeist'],
+        source='remote',
+        supports_custom_fonts=True,
+        supports_custom_seasons=False,
+        supported_extras=[],
+        description=[
+            "Card based on Wdvh's White Text Absolute card, using the same "
+            'format, but has the season number included in the episode text.',
+        ]
+    )
+
+    class CardModel(BaseCardTypeCustomFontNoText):
+        title_text: str
+        episode_text: str
+        hide_episode_text: bool = False
+        episode_text_color: str = '#FFFFFF'
+        omit_gradient: bool = False
+
+        @model_validator(mode='after')
+        def toggle_text_hiding(self) -> Self:
+            self.hide_episode_text |= (len(self.episode_text) == 0)
+
+            return self
+
+    """Directory where all reference files used by this card are stored"""
+    REF_DIRECTORY = Path(__file__).parent.parent / 'ref'
+
+    """Default configuration for this card type"""
+    TITLE_FONT = RemoteFile('lyonza', 'TerminalDosis-Bold.ttf').resolve()
+    CardConfig = DefaultCardConfig(
+        font_file=TITLE_FONT,
+        font_color='#FFFFFF',
+        font_replacements={
+            '[': '(', ']': ')', '(': '[', ')': ']', '―': '-', '…': '...'
+        },
+        title_max_line_width=32,
+        title_max_line_count=3,
+        title_split_style='bottom',
+        episode_text_format='S{season_number:02}E{episode_number:02}',
+    )
+
+    """Source path for the gradient image overlayed over all title cards"""
+    __GRADIENT_IMAGE = RemoteFile('lyonza', 'GRADIENTABS.png')
+
+    """Default fonts and color for series count text"""
+    SEASON_COUNT_FONT = RemoteFile('lyonza', 'TerminalDosis-Bold.ttf')
+    EPISODE_COUNT_FONT = RemoteFile('lyonza', 'TerminalDosis-Bold.ttf')
+    SERIES_COUNT_TEXT_COLOR = '#FFFFFF'
+
+    __slots__ = (
+        'source_file', 'output_file', 'title_text', 'episode_text',
+        'hide_episode_text', 'font_file', 'font_size', 'font_color',
+        'font_vertical_shift', 'font_interline_spacing', 'font_kerning',
+        'font_stroke_width', 'episode_text_color', 'omit_gradient',
+    )
+
+
+    def __init__(self, *,
+            source_file: Path,
+            card_file: Path,
+            title_text: str,
+            episode_text: str,
+            hide_episode_text: bool = False,
+            font_color: str = CardConfig.font_color,
+            font_file: str = str(CardConfig.font_file),
+            font_interline_spacing: int = 0,
+            font_kerning: float = 1.0,
+            font_size: float,
+            font_stroke_width: float = 1.0,
+            font_vertical_shift: int = 0,
+            blur: bool = False,
+            grayscale: bool = False,
+            episode_text_color: str = SERIES_COUNT_TEXT_COLOR,
+            omit_gradient: bool = False,
+            **unused: Any,
+        ) -> None:
+        """Initialize this card"""
+
+        super().__init__(blur, grayscale)
+
+        self.source_file = source_file
+        self.output_file = card_file
+
+        # Ensure characters that need to be escaped are
+        self.title_text = self.image_magick.escape_chars(title_text)
+        self.episode_text = self.image_magick.escape_chars(episode_text)
+        self.hide_episode_text = hide_episode_text
+
+        self.font_color = font_color
+        self.font_file = font_file
+        self.font_interline_spacing = font_interline_spacing
+        self.font_kerning = font_kerning
+        self.font_size = font_size
+        self.font_stroke_width = font_stroke_width
+        self.font_vertical_shift = font_vertical_shift
+
+        self.episode_text_color = episode_text_color
+        self.omit_gradient = omit_gradient
+
+
+    @property
+    def title_text_command(self) -> ImageMagickCommands:
+        """Add episode title text to the provide image."""
+
+        font_size = 180 * self.font_size
+        interline_spacing = -17 + self.font_interline_spacing
+        kerning = -1.25 * self.font_kerning
+        stroke_width = 3.0 * self.font_stroke_width
+        vertical_shift = 50 + self.font_vertical_shift
+
+        return [
+            # Global text effects
+            f'-font "{self.font_file}"',
+            f'-kerning {kerning}',
+            f'-interword-spacing 50',
+            f'-interline-spacing {interline_spacing}',
+            f'-pointsize {font_size}',
+            f'-gravity south',
+            # Black stroke
+            f'-fill black',
+            f'-stroke black',
+            f'-strokewidth {stroke_width}',
+            f'-annotate +0+{vertical_shift} "{self.title_text}"',
+            # Actual title text
+            f'-fill "{self.font_color}"',
+            f'-annotate +0+{vertical_shift} "{self.title_text}"',
+        ]
+
+
+    @property
+    def index_text_command(self) -> ImageMagickCommands:
+        """Adds the series count text without season title/number."""
+
+        if self.hide_episode_text:
+            return []
+
+        return [
+            # Global text effects
+            f'+interword-spacing',
+            f'-kerning 5.42',
+            f'-pointsize 120',
+            f'-font "{self.EPISODE_COUNT_FONT.resolve()}"',
+            f'-gravity west',
+            # Add black stroke
+            f'-fill black',
+            f'-stroke black',
+            f'-strokewidth 6',
+            f'-annotate +100-750 "{self.episode_text}"',
+            # Add actual episode text
+            f'-fill "{self.episode_text_color}"',
+            f'-stroke black',
+            f'-strokewidth 0.75',
+            f'-annotate +100-750 "{self.episode_text}"',
+        ]
+
+
+    def create(self) -> None:
+        """Create this object's defined title card."""
+
+        if self.omit_gradient:
+            gradient_command = []
+        else:
+            gradient_command = [
+                f'"{self.__GRADIENT_IMAGE.resolve()}"',
+                f'-composite',
+            ]
+
+        self.image_magick.run([
+            f'convert "{self.source_file.resolve()}"',
+            # Overlay gradient
+            *self.resize_and_style,
+            *gradient_command,
+            *self.title_text_command,
+            *self.index_text_command,
+            # Attempt to overlay mask
+            *self.add_overlay_mask(self.source_file),
+            # Resize and write output
+            *self.resize_output,
+            f'"{self.output_file.resolve()}"',
+        ])
