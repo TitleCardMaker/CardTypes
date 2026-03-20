@@ -1,7 +1,7 @@
 from pathlib import Path
-from typing import Annotated, Literal, Union
+from typing import Annotated, ClassVar, Literal, Self
 
-from pydantic import Field, root_validator
+from pydantic import Field, FilePath, field_validator, model_validator
 
 from app.cards.base import (
     BaseCardType,
@@ -10,9 +10,13 @@ from app.cards.base import (
     Extra,
     ImageMagickCommands,
 )
-from app.cards.loader import RemoteFile
+from app.cards.loader import RemoteDirectory
 from app.info.episode import EpisodeInfo
-from app.schemas.base import BaseCardTypeCustomFontAllText
+from app.schemas.base import (
+    BaseCardModel,
+    BaseCardTypeCustomFontAllText,
+    FontSize,
+)
 
 
 class DawnTitleCard(BaseCardType):
@@ -28,8 +32,8 @@ class DawnTitleCard(BaseCardType):
         name='Dawn',
         identifier='Supremicus/DawnTitleCard',
         example=(
-            'https://raw.githubusercontent.com/CollinHeist/'
-            'TitleCardMaker-CardTypes/web-ui/Supremicus/'
+            'https://raw.githubusercontent.com/TitleCardMaker/'
+            'CardTypes/web-ui-develop/Supremicus/'
             'DawnTitleCard.preview.jpg'
         ),
         creators=['Supremicus'],
@@ -45,25 +49,12 @@ class DawnTitleCard(BaseCardType):
                 default='black',
             ),
             Extra(
-                name='Title Text Horizontal Shift',
-                identifier='title_text_horizontal_shift',
-                description='Horizontal shift for the title text',
-                tooltip=(
-                    'Horizontal shift to apply to the title text. Default is '
-                    '0. Unit is pixels.'
-                ),
-                default=0,
-            ),
-            Extra(
                 name='Episode Text Vertical Shift',
                 identifier='episode_text_vertical_shift',
                 description='Vertical shift for episode text',
                 tooltip=(
                     'Additional vertical shift to apply to the season and '
-                    'episode text. If you encounter multi-line issues, problem '
-                    'fonts maybe fixed by Fix vertical metrics at '
-                    '<v>https://transfonter.org/</v>. Default is <v>0</v>. '
-                    'Unit is pixels.'
+                    'episode text. Unit is pixels.'
                 ),
                 default=0,
             ),
@@ -73,7 +64,7 @@ class DawnTitleCard(BaseCardType):
                 description='Font to use for the season and episode text',
                 tooltip=(
                     'This can be just a file name if the font file is in the '
-                    "Series' source directory, <v>{title_font}</v> to match "
+                    'Series source directory, <v>{font_file}</v> to match '
                     'the Font used for the title text, or a full path to the '
                     'font file.'
                 ),
@@ -101,15 +92,68 @@ class DawnTitleCard(BaseCardType):
                 name='Episode Text Kerning',
                 identifier='episode_text_kerning',
                 description='Spacing between characters for the episode text',
-                tooltip='Default is <v>18</v>. Unit is pixels.',
-                default=18,
+                tooltip='Default is <v>0</v>. Unit is pixels.',
+                default=0,
             ),
             Extra(
-                name='Separator Character',
+                name='Episode Text Interword Spacing',
+                identifier='episode_text_interword_spacing',
+                description='Spacing between words for the episode text',
+                tooltip='Default is <v>0</v>. Unit is pixels.',
+                default=0,
+            ),
+            Extra(
+                name='Separator Character / Image',
                 identifier='separator',
-                description='Character to separate season and episode text',
-                tooltip='Default is <v>•</v>.',
+                description='Character or image to separate season and episode text',
+                tooltip=(
+                    'Default is <v>•</v>. You may also provide an image file '
+                    'name if the image file is in the Series source directory, '
+                    'or a full path to an image file to use as the separator.'
+                ),
                 default='•',
+            ),
+            Extra(
+                name='Separator Image Padding',
+                identifier='separator_image_padding',
+                description='Padding to apply to the separator image',
+                tooltip=(
+                    'Additional padding to apply to the left and right of the '
+                    'separator image if used. Default is <v>0</v>. Unit is pixels.'
+                ),
+                default=0,
+            ),
+            Extra(
+                name='Separator Image Height',
+                identifier='separator_image_height',
+                description='Adjust the height of the separator image',
+                tooltip=(
+                    'Adjusts the height of the separator image if used '
+                    'keeping aspect ratio. Default is <v>100</v>. Unit is pixels.'
+                ),
+                default=100,
+            ),
+            Extra(
+                name='Separator Image Y Offset',
+                identifier='separator_image_y_offset',
+                description='Adjust the vertical position of the separator image',
+                tooltip=(
+                    'Adjusts the vertical position of the separator image if used. '
+                    'Default is <v>0</v>. Unit is pixels.'
+                ),
+                default=0,
+            ),
+            Extra(
+                name='Separator Image Stroke',
+                identifier='separator_image_use_stroke',
+                description='Whether to apply a stroke to the separator image',
+                tooltip=(
+                    'Automatically apply a stroke to the separator image to match '
+                    'text stroke width of text. Either <v>True</v> or <v>False</v>. '
+                    'Default is <v>True</v>.'
+                    '<br><b>WARNING</b>: Artifacting will occur on stray pixels.'
+                ),
+                default='True',
             ),
             Extra(
                 name='Horizontal Alignment',
@@ -161,112 +205,69 @@ class DawnTitleCard(BaseCardType):
         ]
     )
 
-    class CardModel(BaseCardTypeCustomFontAllText):
-        stroke_color: str = 'black'
-        title_text_horizontal_shift: int = 0
-        episode_text_vertical_shift: int = 0
-        episode_text_font: Union[
-            Literal['{font_file}'],
-            str,
-            Path
-        ] = str(RemoteFile('Supremicus', 'ref/fonts/ExoSoft-Medium.ttf'))
-        episode_text_font_size: Annotated[float, Field(ge=0)] = 1.0
-        episode_text_color: str | None = None
-        episode_text_stroke_color: str | None = None
-        episode_text_kerning: int = 18
-        separator: str = '•'
-        h_align: Literal['left', 'center', 'right'] = 'left'
-        crt_overlay: Literal['nobezel', 'bezel'] | None = None
-        crt_state_overlay: bool = False
-        omit_gradient: bool = True
-        watched: bool = True
-
-        @root_validator(skip_on_failure=True, allow_reuse=True)
-        def validate_episode_text_font_file(cls, values: dict) -> dict:
-            # Specified as "{title_font}" - use title font file
-            etf = values['episode_text_font']
-            if etf in ('{title_font}', '{font_file}'):
-                values['episode_text_font'] = values['font_file']
-            # Episode text font does not exist, search alongside source image
-            elif not (etf := Path(etf)).exists():
-                if (new_etf := values['source_file'].parent / etf.name).exists():
-                    values['episode_text_font'] = new_etf
-
-            # Verify new specified font file does exist
-            values['episode_text_font'] = Path(values['episode_text_font'])
-            if not Path(values['episode_text_font']).exists():
-                raise ValueError(
-                    f'Specified Episode Text Font ('
-                    f'{values["episode_text_font"]}) does not exist'
-                )
-
-            return values
-
-        @root_validator(skip_on_failure=True)
-        def validate_extras(cls, values: dict) -> dict:
-            # Convert None colors to the default font color
-            if values['episode_text_color'] is None:
-                values['episode_text_color'] = values['font_color']
-            if values['episode_text_stroke_color'] is None:
-                values['episode_text_stroke_color'] = values['stroke_color']
-
-            return values
+    """Remote file directories"""
+    FONT_DIRECTORY: ClassVar[RemoteDirectory] = RemoteDirectory('Supremicus', 'ref/fonts')
+    OVERLAY_DIRECTORY: ClassVar[RemoteDirectory] = RemoteDirectory('Supremicus', 'ref/overlays')
 
     """Default configuration for this card type"""
-    TITLE_FONT = RemoteFile('Supremicus', 'ref/fonts/HelveticaNeue-Bold.ttf').resolve()
     CardConfig = DefaultCardConfig(
-        font_file=TITLE_FONT,
+        font_file=(FONT_DIRECTORY / 'HelveticaNeue-Bold.ttf').resolve(),
         font_color='white',
-        title_max_line_width=28,
+        font_case='upper',
+        font_replacements={},
+        title_max_line_width=24,
         title_max_line_count=4,
         title_split_style='bottom',
+        episode_text_format='EPISODE {episode_number}',
     )
 
     """Characteristics of episode text"""
-    EPISODE_TEXT_FORMAT = 'EPISODE {to_cardinal(episode_number)}'
-    EPISODE_TEXT_FONT = RemoteFile('Supremicus', 'ref/fonts/ExoSoft-Medium.ttf').resolve()
+    EPISODE_TEXT_FONT = FONT_DIRECTORY / 'ExoSoft-Medium.ttf'
 
     """Source path for CRT overlays to be overlayed if enabled"""
-    __OVERLAY_PLAIN = str(RemoteFile('Supremicus', 'ref/overlays/overlay_plain.png'))
-    __OVERLAY_PLAIN_BEZEL = str(RemoteFile('Supremicus', 'ref/overlays/overlay_plain_bezel.png'))
-    __OVERLAY_PLAY = str(RemoteFile('Supremicus', 'ref/overlays/overlay_play.png'))
-    __OVERLAY_PLAY_BEZEL = str(RemoteFile('Supremicus', 'ref/overlays/overlay_play_bezel.png'))
-    __OVERLAY_REWIND = str(RemoteFile('Supremicus', 'ref/overlays/overlay_rewind.png'))
-    __OVERLAY_REWIND_BEZEL = str(RemoteFile('Supremicus', 'ref/overlays/overlay_rewind_bezel.png'))
+    __OVERLAY_PLAIN = OVERLAY_DIRECTORY / 'overlay_plain.png'
+    __OVERLAY_PLAIN_BEZEL = OVERLAY_DIRECTORY / 'overlay_plain_bezel.png'
+    __OVERLAY_PLAY = OVERLAY_DIRECTORY / 'overlay_play.png'
+    __OVERLAY_PLAY_BEZEL = OVERLAY_DIRECTORY / 'overlay_play_bezel.png'
+    __OVERLAY_REWIND = OVERLAY_DIRECTORY / 'overlay_rewind.png'
+    __OVERLAY_REWIND_BEZEL = OVERLAY_DIRECTORY / 'overlay_rewind_bezel.png'
 
     """Source path for the gradient image"""
-    __GRADIENT_IMAGE = str(RemoteFile('Supremicus', 'ref/overlays/gradient.png'))
+    __GRADIENT_IMAGE = OVERLAY_DIRECTORY / 'gradient.png'
 
     __slots__ = (
-        'crt_overlay',
-        'crt_state_overlay',
+        'source_file',
+        'output_file',
+        'title_text',
+        'season_text',
         'episode_text',
+        'hide_season_text',
+        'hide_episode_text',
+        'font_file',
+        'font_color',
+        'font_size',
+        'font_stroke_width',
+        'font_interline_spacing',
+        'font_interword_spacing',
+        'font_kerning',
+        'font_vertical_shift',
+        'stroke_color',
         'episode_text_vertical_shift',
         'episode_text_font',
         'episode_text_font_size',
         'episode_text_color',
         'episode_text_stroke_color',
         'episode_text_kerning', 
-        'font_color',
-        'font_file',
-        'font_interline_spacing',
-        'font_interword_spacing',
-        'font_kerning',
-        'font_size',
-        'font_stroke_width',
-        'font_vertical_shift',
-        'h_align',
-        'hide_season_text',
-        'hide_episode_text',
-        'line_count',
-        'omit_gradient',
-        'output_file',
-        'stroke_color',
-        'title_text_horizontal_shift',
-        'season_text',
+        'episode_text_interword_spacing',
         'separator',
-        'title_text',
-        'source_file',
+        'separator_image_padding',
+        'separator_image_height',
+        'separator_image_y_offset',
+        'separator_image_use_stroke',
+        'h_align',
+        'crt_overlay',
+        'crt_state_overlay',
+        'omit_gradient',
         'watched',
     )
 
@@ -278,25 +279,29 @@ class DawnTitleCard(BaseCardType):
             episode_text: str,
             hide_season_text: bool = False,
             hide_episode_text: bool = False,
-            font_color: str = CardConfig.font_color,
             font_file: str = str(CardConfig.font_file),
+            font_color: str = CardConfig.font_color,
+            font_size: float = 1.0,
+            font_stroke_width: float = 1.0,
             font_interline_spacing: int = 0,
             font_interword_spacing: int = 0,
             font_kerning: float = 1.0,
-            font_size: float = 1.0,
-            font_stroke_width: float = 1.0,
             font_vertical_shift: int = 0,
             blur: bool = False,
             grayscale: bool = False,
             stroke_color: str = 'black',
-            title_text_horizontal_shift: int = 0,
             episode_text_vertical_shift: int = 0,
-            episode_text_font: Path = EPISODE_TEXT_FONT,
+            episode_text_font: Path = EPISODE_TEXT_FONT.resolve(),
             episode_text_font_size: float = 1.0,
-            episode_text_color: str = CardConfig.font_color,
-            episode_text_stroke_color: str = 'black',
-            episode_text_kerning: int = 18,
+            episode_text_color: str | None = None,
+            episode_text_stroke_color: str | None = None,
+            episode_text_kerning: int = 0,
+            episode_text_interword_spacing: int = 0,
             separator: str = '•',
+            separator_image_padding: int = 0,
+            separator_image_height: int = 100,
+            separator_image_y_offset: int = 0,
+            separator_image_use_stroke: bool = True,
             h_align: Literal['left', 'center', 'right'] = 'left',
             crt_overlay: Literal['nobezel', 'bezel'] | None = None,
             crt_state_overlay: bool = False,
@@ -318,28 +323,31 @@ class DawnTitleCard(BaseCardType):
         self.episode_text = self.image_magick.escape_chars(episode_text)
         self.hide_season_text = hide_season_text
         self.hide_episode_text = hide_episode_text
-        self.line_count = len(title_text.split('\n'))
 
-        # Font/card customizations
-        self.font_color = font_color
+        # Font customizations
         self.font_file = font_file
-        self.font_kerning = font_kerning
+        self.font_color = font_color
+        self.font_size = 140 * font_size
+        self.font_stroke_width = font_stroke_width
         self.font_interline_spacing = font_interline_spacing
         self.font_interword_spacing = font_interword_spacing
-        self.font_size = font_size
-        self.font_stroke_width = font_stroke_width
+        self.font_kerning = 1.0 * font_kerning
         self.font_vertical_shift = font_vertical_shift
 
         # Optional extras
         self.stroke_color = stroke_color
-        self.title_text_horizontal_shift = title_text_horizontal_shift
         self.episode_text_vertical_shift = episode_text_vertical_shift
         self.episode_text_font = episode_text_font
-        self.episode_text_font_size = episode_text_font_size
+        self.episode_text_font_size = 60 * episode_text_font_size
         self.episode_text_color = episode_text_color
         self.episode_text_stroke_color = episode_text_stroke_color
         self.episode_text_kerning = episode_text_kerning
+        self.episode_text_interword_spacing = episode_text_interword_spacing
         self.separator = separator
+        self.separator_image_padding = separator_image_padding
+        self.separator_image_height = separator_image_height
+        self.separator_image_y_offset = separator_image_y_offset
+        self.separator_image_use_stroke = separator_image_use_stroke
         self.h_align = h_align
         self.crt_overlay = crt_overlay
         self.crt_state_overlay = crt_state_overlay
@@ -347,9 +355,84 @@ class DawnTitleCard(BaseCardType):
         self.watched = watched
 
 
+    def stroke_separator_image(self, image_path: str | Path) -> ImageMagickCommands:
+        """
+        Return ImageMagick commands to apply a stroke/outline to an image.
+        Resizes separator image to separator image height, applies a border
+        and padding to avoid clipping, and then applies stroke.
+
+        Returns the image with a stroke or just the image if no stroke is defined.
+        """
+
+        # Return the image path as a command if no stroke is to be applied
+        if not self.separator_image_use_stroke \
+            or not self.font_stroke_width or self.font_stroke_width == 0:
+            return [f'"{image_path}"']
+
+        stroke_color = self.episode_text_stroke_color
+        # Divide stoke width by 2 to match imagemagick stroke of half
+        # on inside and half on outside of text
+        stroke_width = round(4.0 * self.font_stroke_width) / 2
+        # Apply border to avoid clipping of stroke + some extra padding
+        border_width = stroke_width + 2
+
+        return [
+            fr'\(',
+                fr'\(',
+                    f'"{image_path}"',
+                    f'-resize x{self.separator_image_height}',
+                    f'-bordercolor none',
+                    f'-border {border_width}',
+                    f'-write mpr:bordered',
+                    f'+delete',
+                fr'\)',
+                fr'\(',
+                    f'mpr:bordered',
+                    f'-alpha extract',
+                    f'-morphology dilate disk:{stroke_width}',
+                fr'\)',
+                fr'\(',
+                    f'mpr:bordered',
+                    f'-alpha extract',
+                fr'\)',
+                f'-compose minus_src',
+                f'-composite',
+                f'-threshold 0',
+                f'-write mpr:stroke',
+                f'+delete',
+                fr'\(',
+                    f'mpr:bordered',
+                    f'-alpha off',
+                    f'-fill {stroke_color}',
+                    f'-colorize 100',
+                    f'mpr:stroke',
+                    f'-compose copy_opacity',
+                    f'-composite',
+                fr'\)',
+                f'mpr:bordered',
+                f'-compose over',
+                f'-composite',
+                f'-alpha on',
+            fr'\)',
+        ]
+
+
     @property
     def index_text_commands(self) -> ImageMagickCommands:
-        """Subcommand for adding the index text to the image."""
+        """
+        Subcommand for adding the index text and separator to the image.
+        Combining it all together with gravity center for alignment and
+        composing together, then smushing horizontally into one image
+        layer like so:
+
+        Top layer
+        +--------+-----------+--------+
+        |  text  | separator |  text  |
+        +--------+-----------+--------+
+        | stroke |  stroke   | stroke |
+        +--------+-----------+--------+
+        Bottom layer
+        """
 
         # All text hidden, return empty commands
         if self.hide_season_text and self.hide_episode_text:
@@ -363,83 +446,109 @@ class DawnTitleCard(BaseCardType):
         else:
             index_text = f'{self.season_text} {self.separator} {self.episode_text}'
 
-        # Horizontal Alignment
-        if self.h_align == 'left':
-            gravity = 'southwest'
-            x = 200
-        elif self.h_align == 'center':
-            gravity = 'south'
-            x = 0
-        else:
-            gravity = 'southeast'
-            x = 200
+        # Use image separator if applicable and no text is hidden
+        if not (self.hide_season_text or self.hide_episode_text) and not \
+            (isinstance(self.separator, str) and len(self.separator) == 1):
 
-        # Font customizations
+            return [
+                # Season text
+                fr'\(',
+                    f'-font "{self.episode_text_font}"',
+                    f'-pointsize {self.episode_text_font_size}',
+                    f'-kerning {self.episode_text_kerning}',
+                    f'-interword-spacing {self.episode_text_interword_spacing}',
+                    f'-gravity center',
+                    fr'\(',
+                        *self._index_text_stroke_commands(self.season_text),
+                    fr'\)',
+                    fr'\(',
+                        f'-fill "{self.episode_text_color}"',
+                        f'label:"{self.season_text}"',
+                    fr'\)',
+                    *([f'-compose over'] if self.font_stroke_width != 0 else []),
+                    *([f'-composite'] if self.font_stroke_width != 0 else []),
+                fr'\)',
+                # Separator image (resize height only to keep aspect ratio)
+                fr'\(',
+                    # Create empty canvas to allow y offset positioning
+                    f'xc:none',
+                    # Double canvas size to accommodate separator image + offset
+                    f'-resize x{self.separator_image_height * 2}',
+                    fr'\(',
+                        *self.stroke_separator_image(self.separator),
+                        f'-resize x{self.separator_image_height}',
+                        f'-geometry +0{self.separator_image_y_offset:+}',
+                    fr'\)',
+                    f'-composite',
+                fr'\)',
+                # Episode text
+                fr'\(',
+                    fr'\(',
+                        *self._index_text_stroke_commands(self.episode_text),  
+                    fr'\)',
+                    fr'\(',
+                        f'-fill "{self.episode_text_color}"',
+                        f'label:"{self.episode_text}"',
+                    fr'\)',
+                    *([f'-compose over'] if self.font_stroke_width != 0 else []),
+                    *([f'-composite'] if self.font_stroke_width != 0 else []),
+                fr'\)',
+                f'+smush {20 + self.separator_image_padding}',
+            ]
+
+        # Return normal text commands if no image separator
+        return [
+            f'-font "{self.episode_text_font}"',
+            f'-pointsize {self.episode_text_font_size}',
+            f'-gravity center',
+            f'-kerning {self.episode_text_kerning}',
+            f'-interword-spacing {self.episode_text_interword_spacing}',
+            *self._index_text_stroke_commands(index_text),
+            f'-fill "{self.episode_text_color}"',
+            f'label:"{index_text}"',
+            *([f'-composite'] if self.font_stroke_width != 0 else []),
+        ]
+
+
+    def _index_text_stroke_commands(self, index_text: str) -> ImageMagickCommands:
+        """Generate stroke commands for index text."""
+
+        # If no stroke, return empty commands
+        if self.font_stroke_width == 0:
+            return []
+
         stroke_width = 4.0 * self.font_stroke_width
 
-        # Base commands
-        base_commands = [
-            f'-background transparent',
-            f'-kerning {self.episode_text_kerning}',
-            f'-pointsize {60 * self.episode_text_font_size}',
-            f'-interword-spacing 14.5',
-            f'-gravity {gravity}',
-            f'-font "{self.episode_text_font.resolve()}"',
-        ]
-
-        # Text offsets
-        offset = (124 * self.font_size) * self.line_count
-        vertical_shift = 50 + self.font_vertical_shift
-        y = 80 + vertical_shift + offset + self.episode_text_vertical_shift
-
         return [
-            *base_commands,
-            f'-fill {self.episode_text_stroke_color}',
-            f'-stroke {self.episode_text_stroke_color}',
+            f'-fill "{self.episode_text_stroke_color}"',
+            f'-stroke "{self.episode_text_stroke_color}"',
             f'-strokewidth {stroke_width}',
-            f'-annotate {x:+}{y:+} "{index_text}"',
-            f'-fill "{self.episode_text_color}"',
-            f'-stroke "{self.episode_text_color}"',
-            f'-strokewidth 0',
-            f'-annotate {x:+}{y:+} "{index_text}"',
+            f'label:"{index_text}"',
+            f'-stroke none',
         ]
+
 
     @property
     def title_text_commands(self) -> ImageMagickCommands:
-        """Subcommands required to add the title text."""
+        """
+        Subcommand for adding the title text to the image. Combines
+        it all together with gravity and transparent stroke for 
+        alignment and composing into one image layer like so:
+
+        Top layer
+        +--------+
+        |  text  |
+        +--------+
+        | stroke |
+        +--------+
+        Bottom layer
+        """
 
         # If no title text, return empty commands
         if not self.title_text:
             return []
 
-        # Horizontal Alignment
-        if self.h_align == 'left':
-            x = 200 + self.title_text_horizontal_shift
-        elif self.h_align == 'center':
-            x = 0
-        else:
-            x = 200 + self.title_text_horizontal_shift
-
-        # Text offsets
-        vertical_shift = 50 + self.font_vertical_shift
-        y = 80 + vertical_shift
-
-        return [
-            *self.title_text_global_effects,
-            *self.title_text_black_stroke,
-            f'-annotate {x:+}{y:+} "{self.title_text}"',
-            *self.title_text_effects,
-            f'-annotate {x:+}{y:+} "{self.title_text}"',
-        ]
-
-
-    @property
-    def title_text_global_effects(self) -> ImageMagickCommands:
-        """
-        ImageMagick commands to implement the title text's global
-        effects. Specifically the the font, kerning, fontsize, and
-        southwest gravity.
-        """
+        stroke_width = 4.0 * self.font_stroke_width
 
         # Horizontal Alignment
         if self.h_align == 'left':
@@ -449,29 +558,27 @@ class DawnTitleCard(BaseCardType):
         else:
             gravity = 'southeast'
 
-        # Font customizations
-        font_size = 124 * self.font_size
-        interline_spacing = -20 + self.font_interline_spacing
-        interword_spacing = 50 + self.font_interword_spacing
-        kerning = -1.25 * self.font_kerning
-
         return [
-            f'-font "{self.font_file}"',
-            f'-kerning {kerning}',
-            f'-interline-spacing {interline_spacing}',
-            f'-interword-spacing {interword_spacing}',
-            f'-pointsize {font_size}',
+            f'-font "{self.font_file.resolve()}"',
+            f'-pointsize {self.font_size}',
             f'-gravity {gravity}',
+            f'-kerning {self.font_kerning}',
+            f'-interline-spacing {self.font_interline_spacing}',
+            f'-interword-spacing {self.font_interword_spacing}',
+            *self._title_text_stroke_commands(),
+            f'-fill "{self.font_color}"',
+            # transparent stroke to keep alignment with h_align gravity and label
+            f'-stroke transparent',
+            f'-strokewidth {stroke_width}',
+            f'label:"{self.title_text}"',
+            *([f'-composite'] if self.font_stroke_width != 0 else []),
         ]
 
 
-    @property
-    def title_text_black_stroke(self) -> ImageMagickCommands:
-        """
-        ImageMagick commands to implement the title text's black stroke.
-        """
+    def _title_text_stroke_commands(self) -> ImageMagickCommands:
+        """Generate stroke/outline commands for title text."""
 
-        # No stroke, return empty command
+        # If no stroke, return empty commands
         if self.font_stroke_width == 0:
             return []
 
@@ -481,23 +588,83 @@ class DawnTitleCard(BaseCardType):
             f'-fill "{self.stroke_color}"',
             f'-stroke "{self.stroke_color}"',
             f'-strokewidth {stroke_width}',
+            f'label:"{self.title_text}"',
+            f'-stroke none',
         ]
 
 
     @property
-    def title_text_effects(self) -> ImageMagickCommands:
-        """Subcommands to implement the title text's standard effects."""
+    def combine_text_commands(self) -> ImageMagickCommands:
+        """
+        Subcommands to combine index and title text layers together and
+        align by h_align. Layers are trimmed by the sides only so we
+        don't need the old title_text_horizontal_shift variable and to
+        keep some padding between the two, user can adjust the gap.
+        Smush pulled the separator image into whitespace so had to
+        resort to title_height and geometry for positioning.
+        """
 
+        # Auto adjust y offset when using separator image
+        if not (self.hide_season_text or self.hide_episode_text) and not \
+            (isinstance(self.separator, str) and len(self.separator) == 1) and \
+            self.separator_image_height > self.episode_text_font_size:
+            auto_adjust_y = (self.separator_image_height - self.episode_text_font_size) / 2
+        else:
+            auto_adjust_y = 0
+
+        # Horizontal Alignment
+        if self.h_align == 'left':
+            gravity = 'southwest'
+            x = 200
+        elif self.h_align == 'center':
+            gravity = 'south'
+            x = 0
+        else:
+            gravity = 'southeast'
+            x = 200
+
+        # Get height of title text using annotate, since we can't use
+        # get_text_label_dimensions trim with our trimming of sides only.
+        # Also keeps our title text at baseline with overhang.
+        title_text_height_command = [
+            f'-font "{self.font_file.resolve()}"',
+            f'-pointsize {self.font_size}',
+            f'-interline-spacing {self.font_interline_spacing}',
+            f'-strokewidth {4.0 * self.font_stroke_width}',
+            f'-annotate +0+0 "{self.title_text}"',
+        ]
+        _, title_height = self.image_magick.get_text_dimensions(
+            title_text_height_command
+        )
+
+        y = 130 + self.font_vertical_shift
+        index_y = y + title_height + self.episode_text_vertical_shift - auto_adjust_y
+
+        # Only trim sides to keep padding between text layers
+        # Conditonally composite only non-empty text layers
         return [
-            f'-fill "{self.font_color}"',
-            f'-stroke "{self.font_color}"',
-            f'-strokewidth 0',
+            fr'\(',
+                *self.index_text_commands,
+                f'-define trim:edges=west,east',
+                f'-trim',
+            fr'\)',
+            f'-gravity {gravity}',
+            f'-geometry {x:+}{index_y:+}',
+            *([f'-composite'] if self.index_text_commands else []),
+            fr'\(',
+                *self.title_text_commands,
+                f'-define trim:edges=west,east',
+                f'-trim',
+            fr'\)',
+            f'-gravity {gravity}',
+            f'-geometry {x:+}{y:+}',
+            *([f'-composite'] if self.title_text_commands else []),
         ]
 
 
     @property
     def add_crt_overlay_commands(self) -> ImageMagickCommands:
-        """Add the static gradient to this object's source image."""
+        """Add the CRT TV overlay to this object's source image."""
 
         if self.crt_overlay is None:
             return []
@@ -528,10 +695,7 @@ class DawnTitleCard(BaseCardType):
 
     @property
     def gradient_commands(self) -> ImageMagickCommands:
-        """
-        Subcommand to overlay the gradient to this image. This rotates
-        and repositions the gradient overlay based on the text position.
-        """
+        """Add the gradient overlay to this object's source image."""
 
         if self.omit_gradient:
             return []
@@ -552,33 +716,28 @@ class DawnTitleCard(BaseCardType):
                 determined.
 
         Returns:
-            'Specials' if the season number is 0; otherwise the cardinal
-            version of the season number. If that's not possible, then
-            just 'S{xx}'.
+            'SPECIALS' if the season number is 0.
+            'SEASON {x}' for the given season number.
         """
 
         if episode_info.season_number == 0:
-            return 'Specials'
+            return 'SPECIALS'
 
-        return 'S{season_number:02}'
+        return f'SEASON {episode_info.season_number}'
 
 
     def create(self) -> None:
-        """
-        Make the necessary ImageMagick and system calls to create this
-        object's defined title card.
-        """
+        """Create this object's defined Title Card."""
 
         self.image_magick.run([
-            f'convert "{self.source_file.resolve()}"',
+            f'convert',
+            f'"{self.source_file.resolve()}"',
             # Resize and optionally blur source image
             *self.resize_and_style,
             # Overlay gradient
             *self.gradient_commands,
-            # Add season episode text
-            *self.index_text_commands,
-            # Title text
-            *self.title_text_commands,
+            # Add combined index and title text
+            *self.combine_text_commands,
             # Add CRT TV overlay
             *self.add_crt_overlay_commands,
             # Attempt to overlay mask
@@ -587,3 +746,80 @@ class DawnTitleCard(BaseCardType):
             *self.resize_output,
             f'"{self.output_file.resolve()}"',
         ])
+
+
+def get_validator_model() -> type[BaseCardModel]:
+    """Get the Pydantic validator class for this card type."""
+
+    class CardModel(BaseCardTypeCustomFontAllText):
+        font_file: FilePath = DawnTitleCard.CardConfig.font_file
+        font_color: str = DawnTitleCard.CardConfig.font_color
+        font_size: FontSize = 1.0
+        stroke_color: str = 'black'
+        title_text_horizontal_shift: int = 0
+        episode_text_vertical_shift: int = 0
+        episode_text_font: FilePath = DawnTitleCard.EPISODE_TEXT_FONT
+        episode_text_font_size: FontSize = 1.0
+        episode_text_color: str | None = None
+        episode_text_stroke_color: str | None = None
+        episode_text_kerning: int = 0
+        episode_text_interword_spacing: int = 0
+        separator: str = '•'
+        separator_image_padding: int = 0
+        separator_image_height: Annotated[int, Field(ge=10)] = 100
+        separator_image_y_offset: int = 0
+        separator_image_use_stroke: bool = True
+        h_align: Literal['left', 'center', 'right'] = 'left'
+        crt_overlay: Literal['nobezel', 'bezel'] | None = None
+        crt_state_overlay: bool = False
+        omit_gradient: bool = True
+        watched: bool | None = None
+
+        @field_validator('episode_text_font', mode='before')
+        @classmethod
+        def validate_episode_text_font(cls, v, info):
+            if v in ('{title_font}', '{font_file}'):
+                v = info.data['font_file']
+            etf = Path(v)
+            if not etf.exists():
+                source_file = info.data.get('source_file')
+                if source_file is not None:
+                    candidate = Path(source_file).parent / etf.name
+                    if candidate.exists():
+                        v = candidate
+                        etf = candidate
+            etf = Path(v)
+            if not etf.exists():
+                raise ValueError(f'Specified Episode Text Font "{etf}" does not exist')
+            return str(etf)
+
+        @field_validator('separator', mode='before')
+        @classmethod
+        def validate_separator(cls, v, info):
+            # Allow a single character as separator
+            if isinstance(v, str) and len(v) == 1:
+                return v
+            # If it's a string that looks like a path, or a Path, try to resolve it
+            sep_path = Path(v)
+            if not sep_path.exists():
+                source_file = info.data.get('source_file')
+                if source_file is not None:
+                    candidate = Path(source_file).parent / sep_path.name
+                    if candidate.exists():
+                        sep_path = candidate
+            if not sep_path.exists():
+                raise ValueError(f'Separator must be a single character or a valid image path "{v}" is invalid')
+            return str(sep_path)
+
+        @model_validator(mode='after')
+        def assign_unassigned_colors(self) -> Self:
+            """Assign any unassigned colors to their fallback values."""
+            if self.episode_text_color is None:
+                self.episode_text_color = self.font_color
+            if self.episode_text_stroke_color is None:
+                self.episode_text_stroke_color = self.stroke_color
+            return self
+
+    return CardModel
+
+DawnTitleCard.CardModel = get_validator_model()
